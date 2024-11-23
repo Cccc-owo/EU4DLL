@@ -30,6 +30,7 @@ namespace TooltipAndButton {
 		uintptr_t tooltipAndButtonProc3ReturnAddress;
 		uintptr_t tooltipAndButtonProc4ReturnAddress1;
 		uintptr_t tooltipAndButtonProc4ReturnAddress2;
+		uintptr_t tooltipAndButtonProc4ReturnAddress3;
 		uintptr_t tooltipAndButtonProc5ReturnAddress1;
 		uintptr_t tooltipAndButtonProc5ReturnAddress2;
 		uintptr_t tooltipAndButtonProc7ReturnAddress1;
@@ -344,11 +345,14 @@ namespace TooltipAndButton {
 			if (BytePattern::temp_instance().has_size(1, u8"処理ループ１の改行処理")) {
 				uintptr_t address = BytePattern::temp_instance().get_first().address();
 
-				// jnz {loc_xxxxx} / inc ebx
+				// jnz {loc_xxxxx} 
 				tooltipAndButtonProc4ReturnAddress1 = Injector::GetBranchDestination(address + 0x6).as_int();
 
-				// jz loc_xxxxx
-				tooltipAndButtonProc4ReturnAddress2 = address + 0x10;
+				// jz {loc_xxxxx}
+				tooltipAndButtonProc4ReturnAddress2 = Injector::GetBranchDestination(address + 0x10).as_int();
+
+				// .text:0000000141593AF1 lea     rdx, qword_1423236F8
+				tooltipAndButtonProc4ReturnAddress3 = address + 0x42;
 
 				Injector::MakeJMP(address, tooltipAndButtonProc4V137, true);
 			}

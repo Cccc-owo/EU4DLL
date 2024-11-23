@@ -256,6 +256,8 @@ struct DllError{
 			bool versionLocalizationProc8Injector : 1;
 			bool unmatchdLocalizationProc9Injector : 1;
 			bool versionLocalizationProc9Injector : 1;
+			bool unmatchdLocalizationProc10Injector : 1;
+			bool versionLocalizationProc10Injector : 1;
 		};
 
 		std::string print() {
@@ -276,7 +278,9 @@ struct DllError{
 				+ PL(unmatchdLocalizationProc8Injector)
 				+ PL(versionLocalizationProc8Injector)
 				+ PL(unmatchdLocalizationProc9Injector)
-				+ PL(versionLocalizationProc9Injector);
+				+ PL(versionLocalizationProc9Injector)
+				+ PL(versionLocalizationProc10Injector)
+				+ PL(unmatchdLocalizationProc10Injector);
 		}
 
 	} localization;

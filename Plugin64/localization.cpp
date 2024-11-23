@@ -791,6 +791,70 @@ namespace Localization {
 		return e;
 	}
 
+	DllError localizationProc10Injector(RunOptions options) {
+		DllError e = {};
+
+		switch (options.version) {
+		case v1_29_2_0:
+		case v1_29_3_0:
+		case v1_29_4_0:
+		case v1_30_1_0:
+		case v1_30_2_0:
+		case v1_30_3_0:
+		case v1_30_4_0:
+		case v1_30_5_0:
+		case v1_31_1_0:
+		case v1_31_2_0:
+		case v1_31_3_0:
+		case v1_31_4_0:
+		case v1_31_5_0:
+		case v1_31_6_0:
+		case v1_32_0_1:
+		case v1_33_0_0:
+		case v1_33_3_0:
+		case v1_34_2_0:
+		case v1_35_1_0:
+		case v1_36_0_0:
+			break;
+		case v1_37_0_0:
+			BytePattern::temp_instance().find_pattern("A3 6E 6F 20 00 00"); // £no
+			if (BytePattern::temp_instance().has_size(3, u8"space")) {
+				intptr_t address = BytePattern::temp_instance().get(2).address();
+				Injector::WriteMemory<BYTE>(address + 0, 0xA3, true); // £no£<nbsp>
+				Injector::WriteMemory<BYTE>(address + 1, 0x6E, true);
+				Injector::WriteMemory<BYTE>(address + 2, 0x6F, true);
+				Injector::WriteMemory<BYTE>(address + 3, 0xA3, true);
+				Injector::WriteMemory<BYTE>(address + 4, 0xA0, true);
+			}
+			else {
+				e.localization.unmatchdLocalizationProc9Injector = true;
+			}
+		
+			BytePattern::temp_instance().find_pattern("A3 79 65 73 20 00 00"); // £yes
+			if (BytePattern::temp_instance().has_size(1, u8"space")) {
+				intptr_t address = BytePattern::temp_instance().get_first().address();
+				Injector::WriteMemory<BYTE>(address + 0, 0xA3, true); // £yes£<nbsp>
+				Injector::WriteMemory<BYTE>(address + 1, 0x79, true);
+				Injector::WriteMemory<BYTE>(address + 2, 0x65, true);
+				Injector::WriteMemory<BYTE>(address + 3, 0x73, true);
+				Injector::WriteMemory<BYTE>(address + 4, 0xA3, true);
+				Injector::WriteMemory<BYTE>(address + 5, 0xA0, true);
+			}
+			else {
+				e.localization.unmatchdLocalizationProc9Injector = true;
+			}
+
+
+			break;
+		default:
+			BytePattern::LoggingInfo(u8"space");
+			e.localization.versionLocalizationProc10Injector = true;
+		}
+
+		return e;
+	}
+
+
 	ParadoxTextObject _year;
 	ParadoxTextObject _month;
 	ParadoxTextObject _day;
@@ -851,6 +915,8 @@ namespace Localization {
 
 		// スペースを変更
 		result |= localizationProc9Injector(options);
+
+		result |= localizationProc10Injector(options);
 
 		return result;
 	}
