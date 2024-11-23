@@ -4,6 +4,7 @@ EXTERN	tooltipAndButtonProc2ReturnAddress	:	QWORD
 EXTERN	tooltipAndButtonProc3ReturnAddress	:	QWORD
 EXTERN	tooltipAndButtonProc4ReturnAddress1	:	QWORD
 EXTERN	tooltipAndButtonProc4ReturnAddress2	:	QWORD
+EXTERN	tooltipAndButtonProc4ReturnAddress3	:	QWORD
 EXTERN	tooltipAndButtonProc5ReturnAddress1	:	QWORD
 EXTERN	tooltipAndButtonProc5ReturnAddress2	:	QWORD
 EXTERN	tooltipAndButtonProc7ReturnAddress1	:	QWORD
@@ -467,21 +468,51 @@ tooltipAndButtonProc4V133 ENDP
 
 tooltipAndButtonProc4V137 PROC
 	cmp		word ptr [r11 + 6], 0
-	jz		JMP_A;
+	jnz		JMP_A;
 
+	cmp		dword ptr [rbp+2190h-21E0h], 0
+	jz		JMP_B
+
+	jmp		JMP_C;
+
+
+JMP_A:
 	cmp		tooltipAndButtonProc2TmpCharacter, 00FFh;
-	ja		JMP_X;
+	ja		JMP_Y;
 
 	push	tooltipAndButtonProc4ReturnAddress1;
 	ret;
 
-JMP_X:
-	nop;
 
-JMP_A:
-	cmp		dword ptr [rbp+2190h-21E0h], 0
+JMP_B:
 	push	tooltipAndButtonProc4ReturnAddress2;
 	ret;
+
+JMP_Y:
+	nop;
+
+JMP_C:
+	mov     rax, [rbp + 2190h + 58h]
+	mov     eax, [rax]
+	add     eax, eax
+	xorps   xmm1, xmm1
+	cvtsi2ss xmm1, rax
+	addss   xmm1, xmm6
+	mov     eax, [rsp + 2290h - 2220h]
+	xorps   xmm0, xmm0
+	cvtsi2ss xmm0, rax
+	comiss  xmm1, xmm0
+	jb      JMP_B
+
+	push	tooltipAndButtonProc4ReturnAddress3;
+	ret;
+
+
+JMP_X:
+	nop
+	push	tooltipAndButtonProc4ReturnAddress2;
+	ret;
+
 tooltipAndButtonProc4V137 ENDP
 
 ;-------------------------------------------;

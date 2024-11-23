@@ -220,7 +220,9 @@ void BytePattern::get_module_ranges(memory_pointer module)
 
 		BytePattern::LoggingInfo(buff);
 
-		if (memcmp((const char*)sec->Name, ".text", 6) == 0 || memcmp((const char*)sec->Name, ".rdata", 7) == 0)
+		if (memcmp((const char*)sec->Name, ".text", 6) == 0 ||
+			memcmp((const char*)sec->Name, ".rdata", 7) == 0 ||
+			memcmp((const char*)sec->Name, ".data", 6) == 0)
 		{
 			range.second = range.first + secSize;
 			this->_ranges.emplace_back(range);

@@ -145,6 +145,11 @@ namespace Version {
 			}
 		}
 
+		BytePattern::temp_instance().find_pattern("63 68 61 6e 67 65 5f 74 61 67 00");
+		if (BytePattern::temp_instance().count() > 0) {
+			BytePattern::LoggingInfo("aaa");
+		}
+
 		// release_v1.??.?
 		BytePattern::temp_instance().find_pattern("72 65 6C 65 61 73 65 5F 31 2E ? ? 2E ? 00");
 		if (version == UNKNOWN && BytePattern::temp_instance().count() > 0) {
