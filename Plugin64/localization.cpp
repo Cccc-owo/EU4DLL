@@ -820,11 +820,11 @@ namespace Localization {
 			BytePattern::temp_instance().find_pattern("A3 6E 6F 20 00 00"); // £no
 			if (BytePattern::temp_instance().has_size(3, u8"space")) {
 				intptr_t address = BytePattern::temp_instance().get(2).address();
-				Injector::WriteMemory<BYTE>(address + 0, 0xA3, true); // £no£<nbsp>
-				Injector::WriteMemory<BYTE>(address + 1, 0x6E, true);
-				Injector::WriteMemory<BYTE>(address + 2, 0x6F, true);
-				Injector::WriteMemory<BYTE>(address + 3, 0xA3, true);
-				Injector::WriteMemory<BYTE>(address + 4, 0xA0, true);
+				Injector::WriteMemory<BYTE>(address + 0, 0xA3, true); // £no
+				Injector::WriteMemory<BYTE>(address + 1, 0x6E, true); // n
+				Injector::WriteMemory<BYTE>(address + 2, 0x6F, true); // o
+				Injector::WriteMemory<BYTE>(address + 3, 0x20, true); // <space>
+				Injector::WriteMemory<BYTE>(address + 4, 0xA0, true); // <nbsp>
 			}
 			else {
 				e.localization.unmatchdLocalizationProc9Injector = true;
@@ -833,12 +833,12 @@ namespace Localization {
 			BytePattern::temp_instance().find_pattern("A3 79 65 73 20 00 00"); // £yes
 			if (BytePattern::temp_instance().has_size(1, u8"space")) {
 				intptr_t address = BytePattern::temp_instance().get_first().address();
-				Injector::WriteMemory<BYTE>(address + 0, 0xA3, true); // £yes£<nbsp>
-				Injector::WriteMemory<BYTE>(address + 1, 0x79, true);
-				Injector::WriteMemory<BYTE>(address + 2, 0x65, true);
-				Injector::WriteMemory<BYTE>(address + 3, 0x73, true);
-				Injector::WriteMemory<BYTE>(address + 4, 0xA3, true);
-				Injector::WriteMemory<BYTE>(address + 5, 0xA0, true);
+				Injector::WriteMemory<BYTE>(address + 0, 0xA3, true); // £
+				Injector::WriteMemory<BYTE>(address + 1, 0x79, true); // y
+				Injector::WriteMemory<BYTE>(address + 2, 0x65, true); // e
+				Injector::WriteMemory<BYTE>(address + 3, 0x73, true); // s
+				Injector::WriteMemory<BYTE>(address + 4, 0x20, true); // <space>
+				Injector::WriteMemory<BYTE>(address + 5, 0xA0, true); // <nbsp>
 			}
 			else {
 				e.localization.unmatchdLocalizationProc9Injector = true;
