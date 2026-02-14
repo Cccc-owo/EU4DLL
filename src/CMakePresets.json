@@ -1,0 +1,17 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "mingw-w64",
+      "displayName": "MinGW-w64 Cross Compile",
+      "binaryDir": "${sourceDir}/../build",
+      "toolchainFile": "${sourceDir}/toolchain/mingw-w64-x86_64.cmake"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "mingw-w64",
+      "configurePreset": "mingw-w64"
+    }
+  ]
+}

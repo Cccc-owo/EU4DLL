@@ -11,3 +11,13 @@ endif()
 
 add_subdirectory(loader)
 add_subdirectory(plugin)
+
+# Package target: cmake --build build --target package
+set(PACKAGE_DIR ${CMAKE_BINARY_DIR}/package)
+add_custom_target(package
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${PACKAGE_DIR}/plugins
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:version> ${PACKAGE_DIR}/
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:plugin64> ${PACKAGE_DIR}/plugins/
+    DEPENDS version plugin64
+    COMMENT "Packaging into ${PACKAGE_DIR}"
+)

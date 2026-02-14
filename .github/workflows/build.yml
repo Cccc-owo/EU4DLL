@@ -27,17 +27,13 @@ jobs:
         run: cmake --build build -j$(nproc)
 
       - name: Package
-        run: |
-          mkdir -p artifact/plugins
-          cp build/loader/version.dll artifact/
-          cp build/plugin/plugin64.dll artifact/plugins/
-          cp README.md artifact/ 2>/dev/null || true
+        run: cmake --build build --target package
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: EU4dll-${{ github.sha }}
-          path: artifact/
+          path: build/package/
 
   release:
     needs: build
@@ -60,11 +56,8 @@ jobs:
 
       - name: Package
         run: |
-          mkdir -p artifact/plugins
-          cp build/loader/version.dll artifact/
-          cp build/plugin/plugin64.dll artifact/plugins/
-          cp README.md artifact/ 2>/dev/null || true
-          cd artifact && zip -r ../EU4dll-${{ github.run_number }}.zip .
+          cmake --build build --target package
+          cd build/package && zip -r ../../EU4dll-${{ github.run_number }}.zip .
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
