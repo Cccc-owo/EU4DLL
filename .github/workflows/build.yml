@@ -1,78 +1,74 @@
-name: DllBuild
+name: Build
+
 on:
   push:
-    branches:
-      - master
-      - develop
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
 
 jobs:
   build:
-    runs-on: windows-latest
-    if: "! contains(github.event.head_commit.message, '[ci skip]')"
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[ci skip]')"
 
     steps:
-    - name: Get source
-      uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Nuget.exe
-      uses: nuget/setup-nuget@v1
-      with:
-        nuget-version: '5.3.1'
+      - name: Install MinGW-w64
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
 
-    - name: Restore nuget db
-      run: nuget restore EU4JPS.sln
+      - name: Configure
+        run: cmake -B build -S src -DCMAKE_TOOLCHAIN_FILE=src/toolchain/mingw-w64-x86_64.cmake
 
-    - name: Setup MSBuild.exe
-      uses: microsoft/setup-msbuild@v1.0.2
+      - name: Build
+        run: cmake --build build -j$(nproc)
 
-    - name: Build source
-      run: msbuild EU4JPS.sln -p:Configuration=release -p:platform=x64
-      shell: cmd
-    
-    - name: Make artifact package
-      run: |
-        New-Item artifact -ItemType Directory
-        New-Item artifact/plugins -ItemType Directory
-      shell: powershell
+      - name: Package
+        run: |
+          mkdir -p artifact/plugins
+          cp build/loader/version.dll artifact/
+          cp build/plugin/plugin64.dll artifact/plugins/
+          cp README.md artifact/ 2>/dev/null || true
 
-    - name: Move files to artifact package
-      run: |
-        Move-Item README.md artifact/
-        Move-Item resource/.dist.v1.json artifact/
-        Move-Item resource/version.dll artifact/
-        Move-Item x64/Release/plugin64.dll artifact/plugins/
-        Move-Item resource/plugin.ini artifact/plugins/
-        Move-Item resource/dllautoupdater.exe artifact/plugins/
-        Move-Item resource/autoupdate64.bat artifact/plugins/
-        Move-Item resource/Plugin.dll artifact/plugins/
-        Move-Item resource/d3d9.dll artifact/
-      shell: powershell
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EU4dll-${{ github.sha }}
+          path: artifact/
 
-    - name: generate artifact zip
-      run: |
-        compress-archive -Path artifact/* -DestinationPath steam_EU4_fixdll_build_${{ github.run_number }}.zip
-      shell: powershell
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.run_number }}
-        release_name: Release ${{ github.run_number }}
-        body: |
-          new dll release!
-        draft: false
-        prerelease: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Upload Release Asset
-      id: upload-release-asset 
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} 
-        asset_path: ./steam_EU4_fixdll_build_${{ github.run_number }}.zip
-        asset_name: steam_EU4_fixdll_build_${{ github.run_number }}.zip
-        asset_content_type: application/json
+      - name: Install MinGW-w64
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
+
+      - name: Configure & Build
+        run: |
+          cmake -B build -S src -DCMAKE_TOOLCHAIN_FILE=src/toolchain/mingw-w64-x86_64.cmake
+          cmake --build build -j$(nproc)
+
+      - name: Package
+        run: |
+          mkdir -p artifact/plugins
+          cp build/loader/version.dll artifact/
+          cp build/plugin/plugin64.dll artifact/plugins/
+          cp README.md artifact/ 2>/dev/null || true
+          cd artifact && zip -r ../EU4dll-${{ github.run_number }}.zip .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release ${{ github.run_number }}
+          files: EU4dll-${{ github.run_number }}.zip
