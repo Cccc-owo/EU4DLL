@@ -47,12 +47,13 @@ namespace Input {
 	DllError inputProc2Injector() {
 		DllError e = {};
 
-		// movzx   eax, byte ptr [rcx+rsi]
-		BytePattern::temp_instance().find_pattern("0F B6 04 31 3C 0A");
-		if (BytePattern::temp_instance().has_size(1, "改行入力")) {
-			uintptr_t address = BytePattern::temp_instance().get_first().address();
+		// xor     ecx, ecx
+		BytePattern::temp_instance().find_pattern("33 C9 48 89 4C 24 20 48 C7 44 24 38 0F 00 00 00 48 89 4C 24 30");
+		if (BytePattern::temp_instance().has_size(3, "バックスペース処理の修正")) {
+			uintptr_t address = BytePattern::temp_instance().get(2).address();
 
-			inputProc2ReturnAddress = address + 0x0E;
+			// movzx   r8d, word ptr [rdi+56h]
+			inputProc2ReturnAddress = address + 0x165;
 
 			Injector::MakeJMP(address, inputProc2V137, true);
 		}

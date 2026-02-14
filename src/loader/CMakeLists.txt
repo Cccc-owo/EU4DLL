@@ -22,3 +22,7 @@ target_link_libraries(version PRIVATE
     ole32
     shell32
 )
+
+if(MINGW)
+    target_link_options(version PRIVATE -static -static-libgcc -static-libstdc++)
+endif()
