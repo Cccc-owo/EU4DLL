@@ -188,3 +188,7 @@ namespace CBitmapFont {
 namespace FileRead {
 	void Init(RunOptions option);
 }
+
+namespace SteamRichPresence {
+	void Init();
+}

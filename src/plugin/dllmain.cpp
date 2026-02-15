@@ -1,4 +1,4 @@
-#include "plugin64.h"
+#include "byte_pattern.h"
 #include "plugin_64.h"
 
 BOOL APIENTRY DllMain(HMODULE hModule,
@@ -20,6 +20,9 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 
 			// UTF-8 auto conversion (IAT hook)
 			FileRead::Init(options);
+
+			// Steam rich presence text fix (IAT hook)
+			SteamRichPresence::Init();
 
 			// Font loading
 			e.merge(Font::Init(options));
