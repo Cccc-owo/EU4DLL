@@ -6,6 +6,9 @@
       "displayName": "MinGW-w64 (Linux Cross Compile)",
       "binaryDir": "${sourceDir}/../build",
       "toolchainFile": "${sourceDir}/toolchain/mingw-w64-x86_64.cmake",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
