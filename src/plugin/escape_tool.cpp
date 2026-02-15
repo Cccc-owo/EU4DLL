@@ -72,32 +72,19 @@ inline wchar_t CP1252ToUCS2(char cp) {
 }
 
 
-errno_t convertWideTextToEscapedText(const wchar_t* from, char** to) {
+std::string convertWideTextToEscapedText(const wchar_t* from) {
+	if (!from)
+		return {};
 
-	errno_t success = 0;
-	int toIndex = 0;
-	UINT64 size = 0;
+	size_t size = wcslen(from);
+	std::string result;
+	result.reserve(size * 3);
 
-	if (from == NULL) {
-		success = 1;
-		goto A;
-	}
-
-	size = wcslen(from);
-
-	*to = (char*)calloc(size * 3 * 2 + 10, sizeof(char));
-
-	if (*to == NULL) {
-		success = 2;
-		goto A;
-	}
-
-	toIndex = 0;
 	for (unsigned int fromIndex = 0; fromIndex < size; fromIndex++) {
 		wchar_t cp = from[fromIndex];
 
 		if (UCS2ToCP1252(cp) != cp) {
-			(*to)[toIndex++] = (BYTE)cp;
+			result += static_cast<char>(static_cast<BYTE>(cp));
 			continue;
 		}
 
@@ -111,7 +98,7 @@ errno_t convertWideTextToEscapedText(const wchar_t* from, char** to) {
 		BYTE escapeChr = 0x10;
 
 		if (high == 0) {
-			(*to)[toIndex++] = (BYTE)cp;
+			result += static_cast<char>(static_cast<BYTE>(cp));
 			continue;
 		}
 
@@ -155,29 +142,27 @@ errno_t convertWideTextToEscapedText(const wchar_t* from, char** to) {
 			break;
 		}
 
-		(*to)[toIndex++] = escapeChr;
-		(*to)[toIndex++] = low;
-		(*to)[toIndex++] = high;
+		result += static_cast<char>(escapeChr);
+		result += static_cast<char>(low);
+		result += static_cast<char>(high);
 	}
 
-A:
-	return success;
+	return result;
 }
 
-errno_t convertEscapedTextToWideText(const std::string *from, std::wstring *to) {
+std::wstring convertEscapedTextToWideText(const std::string& from) {
+	std::wstring result;
 
-	errno_t success = 0;
-
-	for (unsigned int fromIndex = 0; fromIndex < from->length();) {
-		BYTE cp = (BYTE)(*from)[fromIndex++];
+	for (unsigned int fromIndex = 0; fromIndex < from.length();) {
+		BYTE cp = (BYTE)from[fromIndex++];
 		BYTE low = 0;
 		BYTE high = 0;
 		UINT32 sp = 0;
 
 		switch (cp) {
 		case 0x10:case 0x11:case 0x12:case 0x13:
-			low = (BYTE)(*from)[fromIndex++];
-			high = (BYTE)(*from)[fromIndex++];
+			low = (BYTE)from[fromIndex++];
+			high = (BYTE)from[fromIndex++];
 
 			sp = ((high) << 8) + low;
 
@@ -206,184 +191,110 @@ errno_t convertEscapedTextToWideText(const std::string *from, std::wstring *to) 
 			sp = 0x2026;
 		}
 
-		to->append(1,sp);
+		result.append(1, static_cast<wchar_t>(sp));
 	}
 
-	return success;
+	return result;
 }
 
-errno_t convertTextToWideText(const char* from, wchar_t** to) {
+std::wstring convertTextToWideText(const char* from) {
+	if (!from)
+		return {};
 
-	errno_t success = 0;
-	unsigned int err = 0;
-	unsigned int wideTextSize = 0;
+	int wideTextSize = MultiByteToWideChar(CP_UTF8, 0, from, -1, NULL, 0);
+	if (wideTextSize == 0)
+		return {};
 
-	if (from == NULL) {
-		success = 1;
-		goto A;
-	}
+	std::wstring result(wideTextSize, L'\0');
+	int err = MultiByteToWideChar(CP_UTF8, 0, from, -1, result.data(), wideTextSize);
+	if (err == 0)
+		return {};
 
-	wideTextSize = MultiByteToWideChar(
-		CP_UTF8,
-		0,
-		from,
-		-1,
-		NULL,
-		0);
+	// Remove null terminator (MultiByteToWideChar with -1 includes it)
+	if (!result.empty() && result.back() == L'\0')
+		result.pop_back();
 
-	if (wideTextSize == 0) {
-		success = GetLastError();
-		goto A;
-	}
-
-	*to = (wchar_t*)calloc(wideTextSize, sizeof(wchar_t));
-
-	if (*to == NULL) {
-		success = 3;
-		goto A;
-	}
-
-	err = MultiByteToWideChar(
-		CP_UTF8,
-		0,
-		from,
-		-1,
-		*to,
-		wideTextSize);
-
-	if (err == 0) {
-		success = 4;
-		goto B;
-	}
-
-	goto A;
-
-B:
-	free(*to);
-A:
-	return success;
+	return result;
 }
 
-errno_t convertWideTextToUtf8(const std::wstring *from, std::string* to) {
+std::string convertWideTextToUtf8(const std::wstring& from) {
+	int textSize = WideCharToMultiByte(CP_UTF8, 0, from.c_str(), -1, NULL, 0, NULL, NULL);
+	if (textSize == 0)
+		return {};
 
-	unsigned int err = 0;
+	std::string result(textSize, '\0');
+	int err = WideCharToMultiByte(CP_UTF8, 0, from.c_str(), -1, result.data(), textSize, NULL, NULL);
+	if (err == 0)
+		return {};
 
-	unsigned int textSize = WideCharToMultiByte(
-		CP_UTF8,
-		0,
-		from->c_str(),
-		-1,
-		NULL,
-		0,
-		NULL,
-		NULL);
+	// Remove null terminator
+	if (!result.empty() && result.back() == '\0')
+		result.pop_back();
 
-	if (textSize == 0) {
-		return GetLastError();
-	}
-
-	char* buffer = (char*)calloc((UINT64)textSize + 1L, sizeof(char));
-
-	if (buffer == NULL) {
-		return 3;
-	}
-
-	err = WideCharToMultiByte(
-		CP_UTF8,
-		0,
-		from->c_str(),
-		-1,
-		buffer,
-		textSize,
-		NULL,
-		NULL
-	);
-
-	if (err == 0) {
-		free(buffer);
-		return 4;
-	}
-
-	to->append(buffer);
-	free(buffer);
-
-	return 0;
+	return result;
 }
 
 
-ParadoxTextObject* tmpParadoxTextObject = NULL;
+static thread_local std::unique_ptr<ParadoxTextObject> tmpParadoxTextObject;
 char* utf8ToEscapedStr(char* from) {
 
-	if (tmpParadoxTextObject != NULL) {
+	if (tmpParadoxTextObject) {
 		if (tmpParadoxTextObject->len > 0x10) {
 			free(tmpParadoxTextObject->t.p);
 		}
-		delete tmpParadoxTextObject;
 	}
 
-	tmpParadoxTextObject = new ParadoxTextObject();
+	tmpParadoxTextObject = std::make_unique<ParadoxTextObject>();
 
-	wchar_t* tmp1 = NULL;
-	char* tmp2 = NULL;
-
-	char* src = NULL;
+	char* src = nullptr;
 
 	if (*(from + 0x10) >= 0x10) {
-		src = (char*)(*((uintptr_t*)from));
+		src = reinterpret_cast<char*>(*reinterpret_cast<uintptr_t*>(from));
 	}
 	else {
 		src = from;
 	}
 
-	convertTextToWideText(src, &tmp1);
-	convertWideTextToEscapedText(tmp1, &tmp2);
+	std::wstring wide = convertTextToWideText(src);
+	std::string escaped = convertWideTextToEscapedText(wide.c_str());
 
-	free(tmp1);
-
-	UINT64 len = strlen(tmp2);
+	UINT64 len = escaped.length();
 	tmpParadoxTextObject->len = len;
 	tmpParadoxTextObject->len2 = len;
 
 	if (len >= 0x10) {
-		tmpParadoxTextObject->t.p = tmp2;
+		char* buf = static_cast<char*>(calloc(len + 1, sizeof(char)));
+		if (buf) {
+			memcpy(buf, escaped.c_str(), len + 1);
+			tmpParadoxTextObject->t.p = buf;
+		}
 	}
 	else {
-		memcpy(tmpParadoxTextObject->t.text, tmp2, len);
+		memcpy(tmpParadoxTextObject->t.text, escaped.c_str(), len + 1);
 	}
 
-	return (char*)tmpParadoxTextObject;
+	return reinterpret_cast<char*>(tmpParadoxTextObject.get());
 }
 
 void utf8ToEscapedStrP(ParadoxTextObject* src) {
 
-	wchar_t* tmp1 = NULL;
-	char* tmp2 = NULL;
+	std::wstring wide = convertTextToWideText(src->getString().c_str());
+	std::string escaped = convertWideTextToEscapedText(wide.c_str());
 
-	convertTextToWideText(src->getString().c_str(), &tmp1);
-	convertWideTextToEscapedText(tmp1, &tmp2);
-
-	std::string escaped(tmp2);
 	src->setString(&escaped);
-
-	free(tmp1);
-	free(tmp2);
 }
 
-ParadoxTextObject* tmpZV2 = NULL;
+static thread_local std::unique_ptr<ParadoxTextObject> tmpZV2;
 ParadoxTextObject* utf8ToEscapedStr2(ParadoxTextObject* from) {
 
-	if (tmpZV2 != NULL) {
+	if (tmpZV2) {
 		if (tmpZV2->len > 0x10) {
 			free(tmpZV2->t.p);
 		}
-		delete tmpZV2;
 	}
-	tmpZV2 = new ParadoxTextObject();
+	tmpZV2 = std::make_unique<ParadoxTextObject>();
 
-	wchar_t* tmp = NULL;
-	char* tmp2 = NULL;
-
-	char* src = NULL;
+	char* src = nullptr;
 
 	if (from->len >= 0x10) {
 		src = from->t.p;
@@ -392,54 +303,42 @@ ParadoxTextObject* utf8ToEscapedStr2(ParadoxTextObject* from) {
 		src = from->t.text;
 	}
 
-	convertTextToWideText(src, &tmp);
-	convertWideTextToEscapedText(tmp, &tmp2);
+	std::wstring wide = convertTextToWideText(src);
+	std::string escaped = convertWideTextToEscapedText(wide.c_str());
 
-	free(tmp);
-
-	UINT64 len = strlen(tmp2);
+	UINT64 len = escaped.length();
 	tmpZV2->len = len;
 
 	if (len >= 0x10) {
-		tmpZV2->t.p = tmp2;
+		char* buf = static_cast<char*>(calloc(len + 1, sizeof(char)));
+		if (buf) {
+			memcpy(buf, escaped.c_str(), len + 1);
+			tmpZV2->t.p = buf;
+		}
 		tmpZV2->len2 = 0x1F;
 	}
 	else {
-		memcpy(tmpZV2->t.text, tmp2, len);
+		memcpy(tmpZV2->t.text, escaped.c_str(), len + 1);
 	}
 
-	return tmpZV2;
+	return tmpZV2.get();
 }
 
 char* escapedStrToUtf8(ParadoxTextObject* from) {
 
-	std::wstring* buffer = new std::wstring();
-	std::string* dest = new std::string();
 	std::string src = from->getString();
+	std::wstring wide = convertEscapedTextToWideText(src);
+	std::string utf8 = convertWideTextToUtf8(wide);
 
-	convertEscapedTextToWideText(&src, buffer);
-	convertWideTextToUtf8(buffer, dest);
+	from->setString(&utf8);
 
-	from->setString(dest);
-
-	delete buffer;
-	delete dest;
-
-	return (char*)from;
+	return reinterpret_cast<char*>(from);
 }
 
-char* utf8ToEscapedStr3buffer = NULL;
+static thread_local std::string utf8ToEscapedStr3buffer;
 char* utf8ToEscapedStr3(char* from) {
-	if (utf8ToEscapedStr3buffer != NULL) {
-		free(utf8ToEscapedStr3buffer);
-	}
+	std::wstring wide = convertTextToWideText(from);
+	utf8ToEscapedStr3buffer = convertWideTextToEscapedText(wide.c_str());
 
-	wchar_t* tmp = NULL;
-
-	convertTextToWideText(from, &tmp);
-	convertWideTextToEscapedText(tmp, &utf8ToEscapedStr3buffer);
-
-	free(tmp);
-
-	return utf8ToEscapedStr3buffer;
+	return utf8ToEscapedStr3buffer.data();
 }

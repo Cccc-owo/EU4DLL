@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace MapPopup {
@@ -12,9 +14,7 @@ namespace MapPopup {
 		uintptr_t mapPopupProc3ReturnAddress;
 	}
 
-	DllError mapPopupProc1Injector() {
-		DllError e = {};
-
+	bool mapPopupProc1Injector() {
 		// lea     rcx, [rbp+370h+var_320]
 		BytePattern::temp_instance().find_pattern("48 8D 4D 50 E8 ? ? ? ? 90 44 0F B6 C3 BA 01 00 00 00 48 8D 4D 50");
 		if (BytePattern::temp_instance().has_size(3, "ループ１の文字列コピー")) {
@@ -30,17 +30,12 @@ namespace MapPopup {
 
 			// nop
 			mapPopupProc1ReturnAddress = address + 0x1C;
+			return false;
 		}
-		else {
-			e.mapPopup.unmatchdMapPopupProc1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError mapPopupProc2Injector() {
-		DllError e = {};
-
+	bool mapPopupProc2Injector() {
 		BytePattern::temp_instance().find_pattern("0F B6 04 07 4D 8B A4 C7 20 01 00 00");
 		if (BytePattern::temp_instance().has_size(1, "ループ１の文字取得")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
@@ -48,17 +43,12 @@ namespace MapPopup {
 			Injector::MakeJMP(address, mapPopupProc2V137, true);
 
 			mapPopupProc2ReturnAddress = address + 0xF;
+			return false;
 		}
-		else {
-			e.mapPopup.unmatchdMapPopupProc2Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError mapPopupProc3Injector() {
-		DllError e = {};
-
+	bool mapPopupProc3Injector() {
 		// movzx   eax, byte ptr [rsi+rax]
 		BytePattern::temp_instance().find_pattern("0F B6 04 06 4D 8B AC C7 20 01 00 00");
 		if (BytePattern::temp_instance().has_size(1, "ループ２の文字取得")) {
@@ -67,20 +57,17 @@ namespace MapPopup {
 			Injector::MakeJMP(address, mapPopupProc3V137, true);
 
 			mapPopupProc3ReturnAddress = address + 0xF;
+			return false;
 		}
-		else {
-			e.mapPopup.unmatchdMapPopupProc3Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("MapPopup");
 
-		result |= mapPopupProc1Injector();
-		result |= mapPopupProc2Injector();
-		result |= mapPopupProc3Injector();
+		result.add("mapPopupProc1Injector", mapPopupProc1Injector());
+		result.add("mapPopupProc2Injector", mapPopupProc2Injector());
+		result.add("mapPopupProc3Injector", mapPopupProc3Injector());
 
 		return result;
 	}

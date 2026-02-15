@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace Ime {
@@ -29,9 +31,7 @@ namespace Ime {
 
 	SDL_Rect rect = { 0,0,0,0 };
 
-	DllError imeProc1Injector() {
-		DllError e = {};
-
+	bool imeProc1Injector() {
 		// mov     edx, edi
 		BytePattern::temp_instance().find_pattern("8B D7 49 8B CC E8 ? ? ? ? 85 C0 0F 85 5B");
 		if (BytePattern::temp_instance().has_size(1, "SDL_windowsevents.cの修正")) {
@@ -44,16 +44,13 @@ namespace Ime {
 			imeProc1ReturnAddress2 = address - 0x3A;
 
 			Injector::MakeJMP(address, imeProc1V137, true);
+			return false;
 		}
-		else {
-			e.ime.unmatchdImeProc1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError imeProc2Injector() {
-		DllError e = {};
+	bool imeProc2Injector() {
+		bool failed = false;
 
 		HMODULE handle = NULL;
 
@@ -64,7 +61,7 @@ namespace Ime {
 		imeProc2CallAddress = (uintptr_t)GetProcAddress(handle, "SDL_SetTextInputRect");
 
 		if (imeProc2CallAddress == 0) {
-			e.ime.unmatchdImeProc2Injector = true;
+			failed = true;
 		}
 
 		// WM_IME_STARTCOMPOSITION
@@ -79,7 +76,7 @@ namespace Ime {
 			Injector::MakeJMP(address, imeProc2, true);
 		}
 		else {
-			e.ime.unmatchdImeProc2Injector = true;
+			failed = true;
 		}
 
 		// WM_IME_SETCONTEXT: NOP *lParam = 0
@@ -90,7 +87,7 @@ namespace Ime {
 			Injector::MakeNOP(address, 3, true);
 		}
 		else {
-			e.ime.unmatchdImeProc2Injector = true;
+			failed = true;
 		}
 
 		// WM_IME_COMPOSITION: skip IME_GetCompositionString and IME_SendInputEvent
@@ -101,15 +98,13 @@ namespace Ime {
 			Injector::MakeJMP(address, (void*)(address + 0x9D), true);
 		}
 		else {
-			e.ime.unmatchdImeProc2Injector = true;
+			failed = true;
 		}
 
-		return e;
+		return failed;
 	}
 
-	DllError imeProc3Injector() {
-		DllError e = {};
-
+	bool imeProc3Injector() {
 		// mov     rcx, [rbp+0C0h+hRawInput]
 		BytePattern::temp_instance().find_pattern("48 8B 8D F8 00 00 00 48 8B D6 E8 ? ? ? ? 33");
 		if (BytePattern::temp_instance().has_size(2, "SDL_windowsevents.cの修正")) {
@@ -124,20 +119,17 @@ namespace Ime {
 			imeProc3ReturnAddress = address + 0x6A;
 
 			Injector::MakeJMP(address, imeProc3V137, true);
+			return false;
 		}
-		else {
-			e.ime.unmatchdImeProc3Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("Ime");
 
-		result |= imeProc1Injector();
-		result |= imeProc2Injector();
-		result |= imeProc3Injector();
+		result.add("imeProc1Injector", imeProc1Injector());
+		result.add("imeProc2Injector", imeProc2Injector());
+		result.add("imeProc3Injector", imeProc3Injector());
 
 		return result;
 	}

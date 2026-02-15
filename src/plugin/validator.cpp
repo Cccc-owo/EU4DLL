@@ -3,12 +3,12 @@
 
 namespace Validator {
 
-	void Validate(DllError e, RunOptions options) {
+	bool Validate(DllError e, RunOptions options) {
 		auto message = e.print();
 
 		BytePattern::LoggingInfo(message);
 
-		if (e.errorCheck()) {
+		if (e.hasError()) {
 			const WCHAR* msg;
 			const WCHAR* caption;
 
@@ -16,11 +16,8 @@ namespace Validator {
 
 			switch (sysDefLcid) {
 			case MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN):
-				caption = L"\x30A8\x30E9\x30FC"; // エラー
-				msg = L"\x3053\x306E\x30D0\x30FC\x30B8\x30E7\x30F3\x306F"
-					  L"\x307E\x3060\x65E5\x672C\x8A9E\x5316\x306B\x5BFE\x5FDC"
-					  L"\x3057\x3066\x3044\x306A\x3044\x305F\x3081\x8D77\x52D5"
-					  L"\x3067\x304D\x307E\x305B\x3093\x3002\n"
+				caption = L"エラー";
+				msg = L"このバージョンはまだ日本語化に対応していないため起動できません。\n"
 					  L"https://github.com/matanki-saito/EU4dll";
 				break;
 
@@ -38,10 +35,11 @@ namespace Validator {
 
 			BytePattern::LoggingInfo("DLL [NG]");
 
-			exit(-1);
+			return false;
 		}
 		else {
 			BytePattern::LoggingInfo("DLL [OK]");
+			return true;
 		}
 	}
 
@@ -56,11 +54,9 @@ namespace Validator {
 
 			switch (sysDefLcid) {
 			case MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN):
-				caption = L"\x672A\x5BFE\x5FDC\x30D0\x30FC\x30B8\x30E7\x30F3"; // 未対応バージョン
-				msg = L"\x65E5\x672C\x8A9E\x5316" L"dll"
-					  L"\x306F\x3053\x306E\x30D0\x30FC\x30B8\x30E7\x30F3\x306B"
-					  L"\x672A\x5BFE\x5FDC\x3067\x3059\x3002"
-					  L"\x8D77\x52D5\x3092\x512A\x5148\x3057\x307E\x3059\x304B\xFF1F"; // 起動を優先しますか？
+				caption = L"未対応バージョン";
+				msg = L"日本語化dllはこのバージョンに未対応です。"
+					  L"起動を優先しますか？";
 				break;
 
 			case MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US):
@@ -79,7 +75,7 @@ namespace Validator {
 			}
 			else {
 				BytePattern::LoggingInfo("DLL [VERSION MISMATCH]");
-				exit(-1);
+				return false;
 			}
 		}
 		else {

@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace MainText {
@@ -14,9 +16,7 @@ namespace MainText {
 		uintptr_t mainTextProc4ReturnAddress;
 	}
 
-	DllError mainTextProc1Injector() {
-		DllError e = {};
-
+	bool mainTextProc1Injector() {
 		// movzx   r8d, byte ptr [rcx+r9]
 		BytePattern::temp_instance().find_pattern("46 0F B6 04 09");
 		if (BytePattern::temp_instance().has_size(1, "テキスト処理ループ２の文字取得修正")) {
@@ -25,17 +25,12 @@ namespace MainText {
 			mainTextProc1ReturnAddress = address + 0x16;
 
 			Injector::MakeJMP(address, mainTextProc1V137, true);
+			return false;
 		}
-		else {
-			e.mainText.unmatchdMainTextProc1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError mainTextProc2Injector() {
-		DllError e = {};
-
+	bool mainTextProc2Injector() {
 		// movsxd  r9, edi
 		BytePattern::temp_instance().find_pattern("4C 63 CF 48 8B 55 F8 4C 03 CA 48 63 CE");
 		if (BytePattern::temp_instance().has_size(1, "テキスト処理ループ１のカウント処理修正")) {
@@ -47,16 +42,13 @@ namespace MainText {
 			mainTextProc2BufferAddress = Injector::GetBranchDestination(address + 0x11);
 
 			Injector::MakeJMP(address, mainTextProc2V137, true);
+			return false;
 		}
-		else {
-			e.mainText.unmatchdMainTextProc2Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError mainTextProc3Injector() {
-		DllError e = {};
+	bool mainTextProc3Injector() {
+		bool failed = false;
 
 		// cmp cs:byte_xxxxx, 0
 		BytePattern::temp_instance().find_pattern("80 3D ? ? ? ? 00 0F 84 5F 01");
@@ -64,7 +56,7 @@ namespace MainText {
 			mainTextProc3ReturnAddress2 = BytePattern::temp_instance().get_first().address();
 		}
 		else {
-			e.mainText.unmatchdMainTextProc3Injector = true;
+			failed = true;
 		}
 
 		// cmp word ptr [rcx+6],0
@@ -77,15 +69,13 @@ namespace MainText {
 			Injector::MakeJMP(address, mainTextProc3, true);
 		}
 		else {
-			e.mainText.unmatchdMainTextProc3Injector = true;
+			failed = true;
 		}
 
-		return e;
+		return failed;
 	}
 
-	DllError mainTextProc4Injector() {
-		DllError e = {};
-
+	bool mainTextProc4Injector() {
 		// movzx   eax, byte ptr [r9]
 		BytePattern::temp_instance().find_pattern("41 0F B6 01 49 8B 8C C6 20 01 00 00");
 		if (BytePattern::temp_instance().has_size(1, "テキスト処理ループ１の文字取得修正")) {
@@ -94,21 +84,18 @@ namespace MainText {
 			mainTextProc4ReturnAddress = address + 0x13;
 
 			Injector::MakeJMP(address, mainTextProc4V137, true);
+			return false;
 		}
-		else {
-			e.mainText.unmatchdMainTextProc4Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("MainText");
 
-		result |= mainTextProc1Injector();
-		result |= mainTextProc2Injector();
-		result |= mainTextProc3Injector();
-		result |= mainTextProc4Injector();
+		result.add("mainTextProc1Injector", mainTextProc1Injector());
+		result.add("mainTextProc2Injector", mainTextProc2Injector());
+		result.add("mainTextProc3Injector", mainTextProc3Injector());
+		result.add("mainTextProc4Injector", mainTextProc4Injector());
 
 		return result;
 	}

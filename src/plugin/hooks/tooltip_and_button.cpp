@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace TooltipAndButton {
@@ -22,9 +24,7 @@ namespace TooltipAndButton {
 		uintptr_t tooltipAndButtonProc7ReturnAddress2;
 	}
 
-	DllError tooltipAndButtonProc1Injector() {
-		DllError e = {};
-
+	bool tooltipAndButtonProc1Injector() {
 		// movzx   r8d, byte ptr [rax+rbx]
 		BytePattern::temp_instance().find_pattern("44 0F B6 04 18 BA 01 00 00 00");
 		if (BytePattern::temp_instance().has_size(1, "処理ループ１の文字コピー")) {
@@ -34,17 +34,12 @@ namespace TooltipAndButton {
 			tooltipAndButtonProc1ReturnAddress = address + 0x14;
 
 			Injector::MakeJMP(address, tooltipAndButtonProc1V137, true);
+			return false;
 		}
-		else {
-			e.tooltipAndButton.unmatchdTooltipAndButtonProc1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError tooltipAndButtonProc2Injector() {
-		DllError e = {};
-
+	bool tooltipAndButtonProc2Injector() {
 		// mov     r9d, r14d
 		BytePattern::temp_instance().find_pattern("45 8B CE 41 0F B6 04 01");
 		if (BytePattern::temp_instance().has_size(1, "処理ループ１の文字取得")) {
@@ -53,17 +48,12 @@ namespace TooltipAndButton {
 			tooltipAndButtonProc2ReturnAddress = address + 0xF;
 
 			Injector::MakeJMP(address, tooltipAndButtonProc2V137, true);
+			return false;
 		}
-		else {
-			e.tooltipAndButton.unmatchdTooltipAndButtonProc2Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError tooltipAndButtonProc3Injector() {
-		DllError e = {};
-
+	bool tooltipAndButtonProc3Injector() {
 		// mov     ecx, r15d
 		BytePattern::temp_instance().find_pattern("41 8B CF F3 44 0F 10 9A 48 08 00 00");
 		if (BytePattern::temp_instance().has_size(1, "処理ループ２の文字取得")) {
@@ -72,17 +62,12 @@ namespace TooltipAndButton {
 			tooltipAndButtonProc3ReturnAddress = address + 0x18;
 
 			Injector::MakeJMP(address, tooltipAndButtonProc3V137, true);
+			return false;
 		}
-		else {
-			e.tooltipAndButton.unmatchdTooltipAndButtonProc3Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError tooltipAndButtonProc4Injector() {
-		DllError e = {};
-
+	bool tooltipAndButtonProc4Injector() {
 		// cmp     word ptr [r11+6], 0
 		BytePattern::temp_instance().find_pattern("66 41 83 7B 06 00 0F 85 E0 03");
 		if (BytePattern::temp_instance().has_size(1, "処理ループ１の改行処理")) {
@@ -93,16 +78,13 @@ namespace TooltipAndButton {
 			tooltipAndButtonProc4ReturnAddress3 = address + 0x42;
 
 			Injector::MakeJMP(address, tooltipAndButtonProc4V137, true);
+			return false;
 		}
-		else {
-			e.tooltipAndButton.unmatchdTooltipAndButtonProc4Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError tooltipAndButtonProc5Injector() {
-		DllError e = {};
+	bool tooltipAndButtonProc5Injector() {
+		bool failed = false;
 
 		// movaps  xmm8, [rsp+0F8h+var_58]
 		BytePattern::temp_instance().find_pattern("44 0F 28 84 24 A0 00 00 00 0F 28 BC 24 B0 00 00 00 48");
@@ -110,7 +92,7 @@ namespace TooltipAndButton {
 			tooltipAndButtonProc5ReturnAddress2 = BytePattern::temp_instance().get_first().address();
 		}
 		else {
-			e.tooltipAndButton.unmatchdTooltipAndButtonProc5Injector = true;
+			failed = true;
 		}
 
 		// movzx   edx, byte ptr [rbx+rbp]
@@ -123,30 +105,23 @@ namespace TooltipAndButton {
 			Injector::MakeJMP(address, tooltipAndButtonProc5V137, true);
 		}
 		else {
-			e.tooltipAndButton.unmatchdTooltipAndButtonProc5Injector = true;
+			failed = true;
 		}
 
-		return e;
+		return failed;
 	}
 
-	DllError tooltipAndButtonProc6Injector() {
-		DllError e = {};
-
+	bool tooltipAndButtonProc6Injector() {
 		// nbsp
 		BytePattern::temp_instance().find_pattern("A7 52 2D 20 00 00 00 00");
 		if (BytePattern::temp_instance().has_size(1, "空白をノーブレークスペースに変換")) {
 			Injector::WriteMemory<uint8_t>(BytePattern::temp_instance().get_first().address() + 3, 0xA0, true);
+			return false;
 		}
-		else {
-			e.tooltipAndButton.unmatchdTooltipAndButtonProc6Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError tooltipAndButtonProc7Injector() {
-		DllError e = {};
-
+	bool tooltipAndButtonProc7Injector() {
 		// inc     r14d
 		BytePattern::temp_instance().find_pattern("41 FF C6 44 3B 75 D8");
 		if (BytePattern::temp_instance().has_size(1, "カウントアップ")) {
@@ -156,24 +131,21 @@ namespace TooltipAndButton {
 			tooltipAndButtonProc7ReturnAddress2 = address + 0x14;
 
 			Injector::MakeJMP(address, tooltipAndButtonProc7V137, true);
+			return false;
 		}
-		else {
-			e.tooltipAndButton.unmatchdTooltipAndButtonProc7Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("TooltipAndButton");
 
-		result |= tooltipAndButtonProc1Injector();
-		result |= tooltipAndButtonProc2Injector();
-		result |= tooltipAndButtonProc3Injector();
-		result |= tooltipAndButtonProc4Injector();
-		result |= tooltipAndButtonProc5Injector();
-		result |= tooltipAndButtonProc6Injector();
-		result |= tooltipAndButtonProc7Injector();
+		result.add("tooltipAndButtonProc1Injector", tooltipAndButtonProc1Injector());
+		result.add("tooltipAndButtonProc2Injector", tooltipAndButtonProc2Injector());
+		result.add("tooltipAndButtonProc3Injector", tooltipAndButtonProc3Injector());
+		result.add("tooltipAndButtonProc4Injector", tooltipAndButtonProc4Injector());
+		result.add("tooltipAndButtonProc5Injector", tooltipAndButtonProc5Injector());
+		result.add("tooltipAndButtonProc6Injector", tooltipAndButtonProc6Injector());
+		result.add("tooltipAndButtonProc7Injector", tooltipAndButtonProc7Injector());
 
 		return result;
 	}

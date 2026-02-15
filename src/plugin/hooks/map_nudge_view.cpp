@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace MapNudgeView {
@@ -6,9 +8,7 @@ namespace MapNudgeView {
 		uintptr_t mapNudgeViewProc1ReturnAddress;
 	}
 
-	DllError mapNudgeViewProc1Injector() {
-		DllError e = {};
-
+	bool mapNudgeViewProc1Injector() {
 		// movzx   eax, byte ptr [rcx+rax]
 		BytePattern::temp_instance().find_pattern("0F B6 04 01 49 8B 94 C4 20 01 00 00 48 85 D2");
 		if (BytePattern::temp_instance().has_size(1, "文字取得処理")) {
@@ -17,18 +17,15 @@ namespace MapNudgeView {
 			mapNudgeViewProc1ReturnAddress = address + 0x0F;
 
 			Injector::MakeJMP(address, mapNudgeViewProc1V137, true);
+			return false;
 		}
-		else {
-			e.mapNudge.unmatchdMapNudgeViewProc1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("MapNudgeView");
 
-		result |= mapNudgeViewProc1Injector();
+		result.add("mapNudgeViewProc1Injector", mapNudgeViewProc1Injector());
 
 		return result;
 	}

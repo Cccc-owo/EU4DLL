@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 #include "../escape_tool.h"
 
@@ -11,8 +13,8 @@ namespace Input {
 		uintptr_t inputProc2ReturnAddress;
 	}
 
-	DllError inputProc1Injector() {
-		DllError e = {};
+	bool inputProc1Injector() {
+		bool failed = false;
 
 		// mov     eax, dword ptr [rbp+120h+var_18C]
 		BytePattern::temp_instance().find_pattern("8B 45 BC 32 DB 3C 80 73 05 0F B6 D8 EB 12");
@@ -27,7 +29,7 @@ namespace Input {
 			Injector::MakeJMP(address, inputProc1V137, true);
 		}
 		else {
-			e.input.unmatchdInputProc1Injector = true;
+			failed = true;
 		}
 
 		// call    qword ptr [rax+18h]
@@ -38,15 +40,13 @@ namespace Input {
 			inputProc1ReturnAddress2 = Injector::GetBranchDestination(address + 0x3);
 		}
 		else {
-			e.input.unmatchdInputProc1Injector = true;
+			failed = true;
 		}
 
-		return e;
+		return failed;
 	}
 
-	DllError inputProc2Injector() {
-		DllError e = {};
-
+	bool inputProc2Injector() {
 		// xor     ecx, ecx
 		BytePattern::temp_instance().find_pattern("33 C9 48 89 4C 24 20 48 C7 44 24 38 0F 00 00 00 48 89 4C 24 30");
 		if (BytePattern::temp_instance().has_size(3, "バックスペース処理の修正")) {
@@ -56,19 +56,16 @@ namespace Input {
 			inputProc2ReturnAddress = address + 0x165;
 
 			Injector::MakeJMP(address, inputProc2V137, true);
+			return false;
 		}
-		else {
-			e.input.unmatchdInputProc2Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("Input");
 
-		result |= inputProc1Injector();
-		result |= inputProc2Injector();
+		result.add("inputProc1Injector", inputProc1Injector());
+		result.add("inputProc2Injector", inputProc2Injector());
 
 		return result;
 	}

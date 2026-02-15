@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 #include "../iat_hook.h"
 #include "../escape_tool.h"
@@ -99,22 +101,16 @@ static bool convertUtf8ToEscaped(const char* input, size_t inputLen, std::vector
     // Need null-terminated string for convertTextToWideText
     std::string nullTerminated(src, srcLen);
 
-    wchar_t* wideText = nullptr;
-    errno_t err = convertTextToWideText(nullTerminated.c_str(), &wideText);
-    if (err != 0 || !wideText)
+    std::wstring wideText = convertTextToWideText(nullTerminated.c_str());
+    if (wideText.empty())
         return false;
 
-    char* escapedText = nullptr;
-    err = convertWideTextToEscapedText(wideText, &escapedText);
-    free(wideText);
-
-    if (err != 0 || !escapedText)
+    std::string escapedText = convertWideTextToEscapedText(wideText.c_str());
+    if (escapedText.empty())
         return false;
 
-    size_t escapedLen = strlen(escapedText);
-    output.assign(escapedText, escapedText + escapedLen);
+    output.assign(escapedText.begin(), escapedText.end());
 
-    free(escapedText);
     return true;
 }
 

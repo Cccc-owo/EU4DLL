@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace EventDialog {
@@ -11,9 +13,7 @@ namespace EventDialog {
 		uintptr_t eventDialogProc3ReturnAddress;
 	}
 
-	DllError eventDialog1Injector() {
-		DllError e = {};
-
+	bool eventDialog1Injector() {
 		// movzx   eax, byte ptr [rdx+rax]
 		BytePattern::temp_instance().find_pattern("0F B6 04 10 4D 8B 9C C5 20 01 00 00");
 		if (BytePattern::temp_instance().has_size(1, "文字取得処理")) {
@@ -22,16 +22,13 @@ namespace EventDialog {
 			eventDialogProc1ReturnAddress = address + 0x18;
 
 			Injector::MakeJMP(address, eventDialogProc1V137, true);
+			return false;
 		}
-		else {
-			e.eventDialog.unmatchdEventDialog1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError eventDialog2Injector() {
-		DllError e = {};
+	bool eventDialog2Injector() {
+		bool failed = false;
 
 		// mov     rax, [rbp+1060h+arg_20]
 		BytePattern::temp_instance().find_pattern("48 8B 85 90 10 00 00 8B 00 03 C0");
@@ -39,7 +36,7 @@ namespace EventDialog {
 			eventDialogProc2ReturnAddress2 = BytePattern::temp_instance().get_first().address();
 		}
 		else {
-			e.eventDialog.unmatchdEventDialog2Injector = true;
+			failed = true;
 		}
 
 		// cvtdq2ps xmm0, xmm0
@@ -52,15 +49,13 @@ namespace EventDialog {
 			Injector::MakeJMP(address, eventDialogProc2V137, true);
 		}
 		else {
-			e.eventDialog.unmatchdEventDialog2Injector = true;
+			failed = true;
 		}
 
-		return e;
+		return failed;
 	}
 
-	DllError eventDialog3Injector() {
-		DllError e = {};
-
+	bool eventDialog3Injector() {
 		// inc     edi
 		BytePattern::temp_instance().find_pattern("FF C7 44 8B 4B 10 41 3B F9 8B 8D 70 10 00 00");
 		if (BytePattern::temp_instance().has_size(1, "カウントアップ")) {
@@ -69,20 +64,17 @@ namespace EventDialog {
 			eventDialogProc3ReturnAddress = address + 0xF;
 
 			Injector::MakeJMP(address, eventDialogProc3V137, true);
+			return false;
 		}
-		else {
-			e.eventDialog.unmatchdEventDialog3Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("EventDialog");
 
-		result |= eventDialog1Injector();
-		result |= eventDialog2Injector();
-		result |= eventDialog3Injector();
+		result.add("eventDialog1Injector", eventDialog1Injector());
+		result.add("eventDialog2Injector", eventDialog2Injector());
+		result.add("eventDialog3Injector", eventDialog3Injector());
 
 		return result;
 	}

@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace MapView {
@@ -13,9 +15,7 @@ namespace MapView {
 		uintptr_t mapViewProc3CallAddress;
 	}
 
-	DllError mapViewProc1Injector() {
-		DllError e = {};
-
+	bool mapViewProc1Injector() {
 		// movss   [rbp+1060h+var_10C0], xmm3
 		BytePattern::temp_instance().find_pattern("F3 0F 11 5D A0 41 0F B6 04 01 49 8B 14 C7");
 		if (BytePattern::temp_instance().has_size(1, "処理ループ２の文字取得処理")) {
@@ -24,17 +24,12 @@ namespace MapView {
 			mapViewProc1ReturnAddress = address + 0x11;
 
 			Injector::MakeJMP(address, mapViewProc1V137, true);
+			return false;
 		}
-		else {
-			e.mapView.unmatchdMapViewProc1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError mapViewProc2Injector() {
-		DllError e = {};
-
+	bool mapViewProc2Injector() {
 		// movzx   eax, byte ptr [r15+rax]
 		BytePattern::temp_instance().find_pattern("41 0F B6 04 07 4D 8B 9C C1 20 01 00 00");
 		if (BytePattern::temp_instance().has_size(1, "処理ループ１の文字取得処理")) {
@@ -43,17 +38,12 @@ namespace MapView {
 			mapViewProc2ReturnAddress = address + 0x10;
 
 			Injector::MakeJMP(address, mapViewProc2V137, true);
+			return false;
 		}
-		else {
-			e.mapView.unmatchdMapViewProc2Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError mapViewProc3Injector() {
-		DllError e = {};
-
+	bool mapViewProc3Injector() {
 		// movzx   r8d, byte ptr [r15+rax]
 		BytePattern::temp_instance().find_pattern("45 0F B6 04 07 BA 01 00 00 00");
 		if (BytePattern::temp_instance().has_size(1, "処理ループ１の文字コピー")) {
@@ -66,17 +56,12 @@ namespace MapView {
 			mapViewProc3ReturnAddress = address + 0x14;
 
 			Injector::MakeJMP(address, mapViewProc3V137, true);
+			return false;
 		}
-		else {
-			e.mapView.unmatchdMapViewProc3Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError mapViewProc4Injector() {
-		DllError e = {};
-
+	bool mapViewProc4Injector() {
 		// lea     rcx, [rsp+1160h+var_10E8]
 		BytePattern::temp_instance().find_pattern("48 8D 4C 24 78 48 83 FB 10 48 0F 43 CE");
 		if (BytePattern::temp_instance().has_size(1, "kerning")) {
@@ -85,21 +70,18 @@ namespace MapView {
 			mapViewProc4ReturnAddress = address + 0x23;
 
 			Injector::MakeJMP(address, mapViewProc4V137, true);
+			return false;
 		}
-		else {
-			e.mapView.unmatchdMapViewProc4Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("MapView");
 
-		result |= mapViewProc1Injector();
-		result |= mapViewProc2Injector();
-		result |= mapViewProc3Injector();
-		result |= mapViewProc4Injector();
+		result.add("mapViewProc1Injector", mapViewProc1Injector());
+		result.add("mapViewProc2Injector", mapViewProc2Injector());
+		result.add("mapViewProc3Injector", mapViewProc3Injector());
+		result.add("mapViewProc4Injector", mapViewProc4Injector());
 
 		return result;
 	}

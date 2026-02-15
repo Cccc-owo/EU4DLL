@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace Font {
@@ -9,25 +11,18 @@ namespace Font {
 		uintptr_t fontBufferHeapZeroClearHeapJmpAddress;
 	}
 
-	DllError charCodePointLimiterPatchInjector() {
-		DllError e = {};
-
+	bool charCodePointLimiterPatchInjector() {
 		// cmp     edi, 0FFh
 		BytePattern::temp_instance().find_pattern("81 FF FF 00 00 00 0F 87 6F 02 00 00 83");
 		if (BytePattern::temp_instance().has_size(1, "Char Code Point Limiter")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 			Injector::WriteMemory<uint8_t>(address + 3, 0xFF, true);
+			return false;
 		}
-		else {
-			e.font.unmatchdCharCodePointLimiterPatchInjector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError fontBufferHeapZeroClearInjector() {
-		DllError e = {};
-
+	bool fontBufferHeapZeroClearInjector() {
 		// mov rcx,cs:hHeap
 		BytePattern::temp_instance().find_pattern("48 8B 0D ? ? ? ? 4C 8B C3 33 D2");
 		if (BytePattern::temp_instance().has_size(1, "Font buffer heap zero clear")) {
@@ -38,79 +33,56 @@ namespace Font {
 			fontBufferHeapZeroClearReturnAddress = address + 0x15;
 
 			Injector::MakeJMP(address, fontBufferHeapZeroClear, true);
+			return false;
 		}
-		else {
-			e.font.unmatchdFontBufferHeapZeroClearInjector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError fontBufferClear1Injector() {
-		DllError e = {};
-
+	bool fontBufferClear1Injector() {
 		BytePattern::temp_instance().find_pattern("BA 88 3D 00 00 48 8B 4D");
 		if (BytePattern::temp_instance().has_size(1, "Font buffer clear")) {
 			Injector::WriteMemory<uint8_t>(BytePattern::temp_instance().get_first().address(0x3), 0x10, true);
+			return false;
 		}
-		else {
-			e.font.unmatchdFontBufferClear1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError fontBufferClear2Injector() {
-		DllError e = {};
-
+	bool fontBufferClear2Injector() {
 		BytePattern::temp_instance().find_pattern("BA 88 3D 00 00 48 8B CB E8");
 		if (BytePattern::temp_instance().has_size(1, "Font buffer clear")) {
 			Injector::WriteMemory<uint8_t>(BytePattern::temp_instance().get_first().address(0x3), 0x10, true);
+			return false;
 		}
-		else {
-			e.font.unmatchdFontBufferClear2Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError fontBufferExpansionInjector() {
-		DllError e = {};
-
+	bool fontBufferExpansionInjector() {
 		BytePattern::temp_instance().find_pattern("B9 88 3D 00 00");
 		if (BytePattern::temp_instance().has_size(1, "Font buffer expansion")) {
 			Injector::WriteMemory<uint8_t>(BytePattern::temp_instance().get_first().address(0x3), 0x10, true);
+			return false;
 		}
-		else {
-			e.font.unmatchdFontBufferExpansionInjector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError fontSizeLimitInjector() {
-		DllError e = {};
-
+	bool fontSizeLimitInjector() {
 		BytePattern::temp_instance().find_pattern("41 81 FE 00 00 00 01");
 		if (BytePattern::temp_instance().has_size(1, "Font size limit")) {
 			Injector::WriteMemory<uint8_t>(BytePattern::temp_instance().get_first().address(0x6), 0x04, true);
+			return false;
 		}
-		else {
-			e.font.unmatchdFontSizeLimitInjector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("Font");
 
-		result |= charCodePointLimiterPatchInjector();
-		result |= fontBufferHeapZeroClearInjector();
-		result |= fontBufferClear1Injector();
-		result |= fontBufferClear2Injector();
-		result |= fontBufferExpansionInjector();
-		result |= fontSizeLimitInjector();
+		result.add("charCodePointLimiterPatchInjector", charCodePointLimiterPatchInjector());
+		result.add("fontBufferHeapZeroClearInjector", fontBufferHeapZeroClearInjector());
+		result.add("fontBufferClear1Injector", fontBufferClear1Injector());
+		result.add("fontBufferClear2Injector", fontBufferClear2Injector());
+		result.add("fontBufferExpansionInjector", fontBufferExpansionInjector());
+		result.add("fontSizeLimitInjector", fontSizeLimitInjector());
 
 		return result;
 	}

@@ -8,7 +8,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	if (ulReasonForCall == DLL_PROCESS_ATTACH){
 		BytePattern::StartLog(L"eu4_jps_2");
 
-		DllError e = {};
+		DllError e;
 
 		RunOptions options = {};
 
@@ -22,52 +22,52 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 			FileRead::Init(options);
 
 			// Font loading
-			e |= Font::Init(options);
+			e.merge(Font::Init(options));
 
 			// UI text display
-			e |= MainText::Init(options);
+			e.merge(MainText::Init(options));
 
 			// Tooltip and button display
-			e |= TooltipAndButton::Init(options);
+			e.merge(TooltipAndButton::Init(options));
 
 			// Map text display
-			e |= MapView::Init(options);
+			e.merge(MapView::Init(options));
 
 			// Map text display (nudge)
-			e |= MapNudgeView::Init(options);
+			e.merge(MapNudgeView::Init(options));
 
 			// Map text adjustment
-			e |= MapAdjustment::Init(options);
+			e.merge(MapAdjustment::Init(options));
 
 			// Map text justify
-			e |= MapJustify::Init(options);
+			e.merge(MapJustify::Init(options));
 
 			// Event dialog and map text adjustment
-			e |= EventDialog::Init(options);
+			e.merge(EventDialog::Init(options));
 
 			// Map popup text display
-			e |= MapPopup::Init(options);
+			e.merge(MapPopup::Init(options));
 
 			// List field adjustment
-			e |= ListFieldAdjustment::Init(options);
+			e.merge(ListFieldAdjustment::Init(options));
 
 			// File save
-			e |= FileSave::Init(options);
+			e.merge(FileSave::Init(options));
 
 			// Date format
-			e |= Date::Init(options);
+			e.merge(Date::Init(options));
 
 			// IME
-			e |= Ime::Init(options);
+			e.merge(Ime::Init(options));
 
 			// Input
-			e |= Input::Init(options);
+			e.merge(Input::Init(options));
 
 			// Localization string reorder
-			e |= Localization::Init(options);
+			e.merge(Localization::Init(options));
 
 			// BitmapFont adjustment, scroll adjustment
-			e |= CBitmapFont::Init(options);
+			e.merge(CBitmapFont::Init(options));
 
 			Validator::Validate(e, options);
 		}

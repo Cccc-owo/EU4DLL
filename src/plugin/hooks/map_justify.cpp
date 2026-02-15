@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace MapJustify {
@@ -11,9 +13,7 @@ namespace MapJustify {
 		uintptr_t mapJustifyProc4ReturnAddress;
 	}
 
-	DllError mapJustifyProc1Injector() {
-		DllError e = {};
-
+	bool mapJustifyProc1Injector() {
 		// movzx   eax, byte ptr [rcx+rax]
 		BytePattern::temp_instance().find_pattern("0F B6 04 01 88 85 08 08 00 00 F3 44 0F 10 A2 48 08 00 00");
 		if (BytePattern::temp_instance().has_size(1, "文字取得処理")) {
@@ -22,17 +22,12 @@ namespace MapJustify {
 			mapJustifyProc1ReturnAddress1 = address + 0x1A;
 
 			Injector::MakeJMP(address, mapJustifyProc1V137, true);
+			return false;
 		}
-		else {
-			e.mapJustify.unmatchdMapJustifyProc1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError mapJustifyProc2Injector() {
-		DllError e = {};
-
+	bool mapJustifyProc2Injector() {
 		// movd    xmm6, esi
 		BytePattern::temp_instance().find_pattern("66 0F 6E F6 0F 5B F6 48 8B 85 68 01 00 00");
 		if (BytePattern::temp_instance().has_size(1, "一文字表示の調整")) {
@@ -41,17 +36,12 @@ namespace MapJustify {
 			mapJustifyProc2ReturnAddress = address + 0x14;
 
 			Injector::MakeJMP(address, mapJustifyProc2V137, true);
+			return false;
 		}
-		else {
-			e.mapJustify.unmatchdMapJustifyProc2Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError mapJustifyProc4Injector() {
-		DllError e = {};
-
+	bool mapJustifyProc4Injector() {
 		// inc     esi
 		BytePattern::temp_instance().find_pattern("FF C6 89 B5 E8 07 00 00 48 FF C1");
 		if (BytePattern::temp_instance().has_size(1, "カウント処理")) {
@@ -60,20 +50,17 @@ namespace MapJustify {
 			mapJustifyProc4ReturnAddress = address + 0x12;
 
 			Injector::MakeJMP(address, mapJustifyProc4V137, true);
+			return false;
 		}
-		else {
-			e.mapJustify.unmatchdMapJustifyProc4Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("MapJustify");
 
-		result |= mapJustifyProc1Injector();
-		result |= mapJustifyProc2Injector();
-		result |= mapJustifyProc4Injector();
+		result.add("mapJustifyProc1Injector", mapJustifyProc1Injector());
+		result.add("mapJustifyProc2Injector", mapJustifyProc2Injector());
+		result.add("mapJustifyProc4Injector", mapJustifyProc4Injector());
 
 		return result;
 	}

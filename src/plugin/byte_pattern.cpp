@@ -47,12 +47,11 @@ void BytePattern::StartLog(const wchar_t* module_name)
 {
 	ShutdownLog();
 
-	wchar_t exe_path[512];
-	wchar_t filename[512];
+	std::wstring filename = std::wstring(L"pattern_") + module_name + L".log";
 
-	swprintf(filename, 512, L"pattern_%ls.log", module_name);
-
-	GetModuleFileName(NULL, exe_path, 512);
+	std::wstring exe_path(MAX_PATH, L'\0');
+	DWORD len = GetModuleFileName(NULL, exe_path.data(), static_cast<DWORD>(exe_path.size()));
+	exe_path.resize(len);
 
 	log_stream().open(path { exe_path }.parent_path() / filename, ios::trunc);
 }
@@ -231,10 +230,10 @@ void BytePattern::get_module_ranges(memory_pointer module)
 
 		range.first = module.address() + sec->VirtualAddress;
 
-		char buff[512];
-		snprintf(buff, sizeof(buff), "%s %d %d", sec->Name, secSize, sec->VirtualAddress);
+		std::string info = std::string(reinterpret_cast<const char*>(sec->Name)) +
+			" " + std::to_string(secSize) + " " + std::to_string(sec->VirtualAddress);
 
-		BytePattern::LoggingInfo(buff);
+		BytePattern::LoggingInfo(info);
 
 		if (memcmp((const char*)sec->Name, ".text", 6) == 0 ||
 			memcmp((const char*)sec->Name, ".rdata", 7) == 0 ||

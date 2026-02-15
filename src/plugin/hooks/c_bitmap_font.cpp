@@ -1,3 +1,5 @@
+#include "../byte_pattern.h"
+#include "../injector.h"
 #include "../plugin_64.h"
 
 namespace CBitmapFont {
@@ -8,9 +10,7 @@ namespace CBitmapFont {
 		uintptr_t cBitmapFontProc2ReturnAddress;
 	}
 
-	DllError cBitmapFontProc1Injector() {
-		DllError e = {};
-
+	bool cBitmapFontProc1Injector() {
 		// movzx   eax, byte ptr [rdi+rax]
 		BytePattern::temp_instance().find_pattern("0F B6 04 07 49 8B 8C C6 20 01 00 00");
 		if (BytePattern::temp_instance().has_size(1, "CBitmapFont文字取得1")) {
@@ -19,17 +19,12 @@ namespace CBitmapFont {
 			cBitmapFontProc1ReturnAddress = address + 0x0F;
 
 			Injector::MakeJMP(address, cBitmapFontProc1V137, true);
+			return false;
 		}
-		else {
-			e.cBitmapFont.unmatchdCBitmapFontProc1Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError cBitmapFontProc2Injector() {
-		DllError e = {};
-
+	bool cBitmapFontProc2Injector() {
 		// movss   xmm6, dword ptr [r14+848h]
 		BytePattern::temp_instance().find_pattern("F3 41 0F 10 B6 48 08 00 00 0F B6 04 02 4D 8B 3C C6");
 		if (BytePattern::temp_instance().has_size(1, "CBitmapFont文字取得2")) {
@@ -38,19 +33,16 @@ namespace CBitmapFont {
 			cBitmapFontProc2ReturnAddress = address + 0x14;
 
 			Injector::MakeJMP(address, cBitmapFontProc2V137, true);
+			return false;
 		}
-		else {
-			e.cBitmapFont.unmatchdCBitmapFontProc2Injector = true;
-		}
-
-		return e;
+		return true;
 	}
 
-	DllError Init(RunOptions options) {
-		DllError result = {};
+	HookResult Init(RunOptions options) {
+		HookResult result("CBitmapFont");
 
-		result |= cBitmapFontProc1Injector();
-		result |= cBitmapFontProc2Injector();
+		result.add("cBitmapFontProc1Injector", cBitmapFontProc1Injector());
+		result.add("cBitmapFontProc2Injector", cBitmapFontProc2Injector());
 
 		return result;
 	}

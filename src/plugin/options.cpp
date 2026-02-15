@@ -1,7 +1,5 @@
-#include "plugin64.h"
 #include "plugin_64.h"
-
-using namespace std;
+#include <filesystem>
 
 namespace Ini {
 	std::wstring constructIniPath() {
@@ -15,83 +13,27 @@ namespace Ini {
 		return iniPath.wstring();
 	}
 
-	void testMode(const std::wstring& ini_path, RunOptions *options) {
+	std::wstring readString(const std::wstring& ini, const wchar_t* key, const wchar_t* def) {
 		wchar_t buf[64] = {0};
-
-		GetPrivateProfileStringW(
-			L"options",
-			L"ERROR_TEST",
-			L"no",
-			buf,
-			64,
-			ini_path.c_str()
-		);
-		options->test = lstrcmpW(buf, L"yes") == 0;
+		GetPrivateProfileStringW(L"options", key, def, buf, 64, ini.c_str());
+		return buf;
 	}
 
-	void separateCharacter(const std::wstring& ini_path, RunOptions* options) {
-		wchar_t buf[64] = { 0 };
-
-		GetPrivateProfileStringW(
-			L"options",
-			L"SEPARATE_CHARACTER_CODE_POINT",
-			L"32",
-			buf,
-			64,
-			ini_path.c_str()
-		);
-		options->separateCharacterCodePoint = _wtoi(buf);
+	bool readBool(const std::wstring& ini, const wchar_t* key, bool def) {
+		return readString(ini, key, def ? L"yes" : L"no") == L"yes";
 	}
 
-	void lineBreakBufferWidth(const std::wstring& ini_path, RunOptions* options) {
-		wchar_t buf[64] = { 0 };
-
-		GetPrivateProfileStringW(
-			L"options",
-			L"LINE_BREAK_BUFFER_WIDTH",
-			L"5",
-			buf,
-			64,
-			ini_path.c_str()
-		);
-		options->lineBreakBufferWidth = _wtoi(buf);
-	}
-
-	void reversingWordsBattleOfArea(const std::wstring& ini_path, RunOptions* options) {
-		wchar_t buf[64] = { 0 };
-
-		GetPrivateProfileStringW(
-			L"options",
-			L"REVERSING_WORDS_BATTLE_OF_AREA",
-			L"yes",
-			buf,
-			64,
-			ini_path.c_str()
-		);
-		options->reversingWordsBattleOfArea = lstrcmpW(buf, L"yes") == 0;
-	}
-
-	void autoUtf8Conversion(const std::wstring& ini_path, RunOptions* options) {
-		wchar_t buf[64] = { 0 };
-
-		GetPrivateProfileStringW(
-			L"options",
-			L"AUTO_UTF8_CONVERSION",
-			L"yes",
-			buf,
-			64,
-			ini_path.c_str()
-		);
-		options->autoUtf8Conversion = lstrcmpW(buf, L"yes") == 0;
+	int readInt(const std::wstring& ini, const wchar_t* key, int def) {
+		return _wtoi(readString(ini, key, std::to_wstring(def).c_str()).c_str());
 	}
 
 	void GetOptionsFromIni(RunOptions* options) {
-		std::wstring ini_path = constructIniPath();
+		std::wstring ini = constructIniPath();
 
-		testMode(ini_path, options);
-		separateCharacter(ini_path, options);
-		reversingWordsBattleOfArea(ini_path, options);
-		lineBreakBufferWidth(ini_path, options);
-		autoUtf8Conversion(ini_path, options);
+		options->test = readBool(ini, L"ERROR_TEST", false);
+		options->separateCharacterCodePoint = readInt(ini, L"SEPARATE_CHARACTER_CODE_POINT", 32);
+		options->reversingWordsBattleOfArea = readBool(ini, L"REVERSING_WORDS_BATTLE_OF_AREA", true);
+		options->lineBreakBufferWidth = readInt(ini, L"LINE_BREAK_BUFFER_WIDTH", 5);
+		options->autoUtf8Conversion = readBool(ini, L"AUTO_UTF8_CONVERSION", true);
 	}
 }
