@@ -41,13 +41,15 @@ imeProc1V137:
     test	eax,eax
     jnz		.LimeProc1_JMP_A
 
-    mov		r11, qword ptr [rip + imeProc1ReturnAddress1]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + imeProc1ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     ret
 
 .LimeProc1_JMP_A:
-    mov		r11, qword ptr [rip + imeProc1ReturnAddress2]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + imeProc1ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 
@@ -56,8 +58,9 @@ imeProc2:
     sub		edx, 0xBC
     jz		.LimeProc2_JMP_A
 
-    mov		r11, qword ptr [rip + imeProc2ReturnAddress2]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + imeProc2ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 .LimeProc2_JMP_A:
@@ -65,8 +68,9 @@ imeProc2:
     mov		r11, qword ptr [rip + imeProc2CallAddress]
     call	r11
 
-    mov		r11, qword ptr [rip + imeProc2ReturnAddress1]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + imeProc2ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl imeProc3V137
@@ -117,6 +121,7 @@ imeProc3V137:
     call    r11
 
 .LimeProc3_JMP_D:
-    mov		r11, qword ptr [rip + imeProc3ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + imeProc3ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

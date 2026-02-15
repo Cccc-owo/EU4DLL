@@ -58,6 +58,7 @@ mapNudgeViewProc1V137:
     mov     rdx, qword ptr [r12+rax*8+0x120]
     test    rdx, rdx
 
-    mov     r11, qword ptr [rip + mapNudgeViewProc1ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + mapNudgeViewProc1ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

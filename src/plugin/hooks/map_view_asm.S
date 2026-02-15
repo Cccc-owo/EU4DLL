@@ -83,9 +83,9 @@ mapViewProc1V137:
     mov     rdx, qword ptr [r15+rax*8]
 
 .LmapViewProc1_JMP_N:
-    # r11 is used as data in this proc, use rax as scratch for push/ret
-    mov     rax, qword ptr [rip + mapViewProc1ReturnAddress]
     push    rax
+    mov     rax, qword ptr [rip + mapViewProc1ReturnAddress]
+    xchg    qword ptr [rsp], rax
     test    rdx, rdx
     ret
 
@@ -131,10 +131,10 @@ mapViewProc2V137:
     mov     eax, NOT_DEF
 
 .LmapViewProc2_JMP_E:
-    # r11 is used as data register; load data first, then use rax for return address
     mov     r11, qword ptr [r9+rax*8+0x120]
-    mov     rax, qword ptr [rip + mapViewProc2ReturnAddress]
     push    rax
+    mov     rax, qword ptr [rip + mapViewProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     test    r11, r11
     ret
 
@@ -171,8 +171,9 @@ mapViewProc3V137:
     mov     word ptr [rax+1], cx
 
 .LmapViewProc3_JMP_B:
-    mov     r11, qword ptr [rip + mapViewProc3ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + mapViewProc3ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mapViewProc4V137
@@ -186,6 +187,7 @@ mapViewProc4V137:
     movzx   edx, byte ptr [rax+r9]
     mov     rcx, r15
 
-    mov     r11, qword ptr [rip + mapViewProc4ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + mapViewProc4ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

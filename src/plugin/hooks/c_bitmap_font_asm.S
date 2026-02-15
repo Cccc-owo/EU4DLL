@@ -62,8 +62,9 @@ cBitmapFontProc1V137:
     mov     rcx, qword ptr [r14 + rax * 8 + 0x120]
     test    rcx, rcx
 
-    mov     r11, qword ptr [rip + cBitmapFontProc1ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + cBitmapFontProc1ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl cBitmapFontProc2V137
@@ -113,6 +114,7 @@ cBitmapFontProc2V137:
     mov     r15, qword ptr [r14+rax*8]
     test    r15, r15
 
-    mov     r11, qword ptr [rip + cBitmapFontProc2ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + cBitmapFontProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

@@ -53,8 +53,9 @@ fileSaveProc1:
     mov		eax, dword ptr [rcx + 0x10]
     test	eax, eax
 
-    mov		r11, qword ptr [rip + fileSaveProc1ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc1ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl fileSaveProc2V137
@@ -73,8 +74,9 @@ fileSaveProc2V137:
     mov     qword ptr [rbp+0x57-0x70], r12
     mov     qword ptr [rbp+0x57-0x68], 0xF
 
-    mov		r11, qword ptr [rip + fileSaveProc2ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl fileSaveProc3V137
@@ -89,8 +91,9 @@ fileSaveProc3V137:
     mov		r11, qword ptr [rip + fileSaveProc3CallAddress2]
     call	r11
 
-    mov		r11, qword ptr [rip + fileSaveProc3ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc3ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl fileSaveProc5V137
@@ -108,8 +111,9 @@ fileSaveProc5V137:
 .LfileSaveProc5_JMP_A:
     lea     rcx, [rsp+0x478-0x398]
 
-    mov		r11, qword ptr [rip + fileSaveProc5ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc5ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl fileSaveProc6V137
@@ -126,8 +130,9 @@ fileSaveProc6V137:
 .LfileSaveProc6_JMP_A:
     lea     rcx, [rsp+0x3E0-0x390]
 
-    mov		r11, qword ptr [rip + fileSaveProc6ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc6ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl fileSaveProc6V137E
@@ -144,8 +149,9 @@ fileSaveProc6V137E:
 .LfileSaveProc6E_JMP_A:
     lea     rcx, [rsp+0x3E0-0x388]
 
-    mov		r11, qword ptr [rip + fileSaveProc6ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc6ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl fileSaveProc6V137G
@@ -162,8 +168,9 @@ fileSaveProc6V137G:
 .LfileSaveProc6G_JMP_A:
     lea     rcx, [rbp+0x460-0x4E0]
 
-    mov     r11, qword ptr [rip + fileSaveProc6ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc6ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl fileSaveProc7V137
@@ -179,8 +186,9 @@ fileSaveProc7V137:
     lea		rcx, [rdi+0xC8]
     mov     rax, [rcx]
 
-    mov		r11, qword ptr [rip + fileSaveProc7ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc7ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl fileSaveProc9
@@ -195,8 +203,9 @@ fileSaveProc9:
     lea     rdx, [rip + fileSaveProc9Text]
     lea     rcx, [rbp+0x57-0xC0]
 
-    mov		r11, qword ptr [rip + fileSaveProc9ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc9ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl fileSaveProc10
@@ -211,6 +220,7 @@ fileSaveProc10:
     lea     rdx, [rip + fileSaveProc10Text]
     lea     rcx, [rsp+0x130-0xC0]
 
-    mov		r11, qword ptr [rip + fileSaveProc10ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fileSaveProc10ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

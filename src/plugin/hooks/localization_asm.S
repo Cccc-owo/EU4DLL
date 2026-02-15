@@ -43,8 +43,9 @@ localizationProc2V137:
     mov     r11, qword ptr [rip + localizationProc2CallAddress]
     call    r11
 
-    mov     r11, qword ptr [rip + localizationProc2ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + localizationProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl localizationProc5V137
@@ -54,8 +55,9 @@ localizationProc5V137:
     mov     r11, qword ptr [rip + localizationProc5CallAddress]
     call    r11
 
-    mov     r11, qword ptr [rip + localizationProc5ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + localizationProc5ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl localizationProc6V137
@@ -66,8 +68,9 @@ localizationProc6V137:
     mov     r11, qword ptr [rip + localizationProc6CallAddress]
     call    r11
 
-    mov     r11, qword ptr [rip + localizationProc6ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + localizationProc6ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl localizationProc8V137
@@ -79,6 +82,7 @@ localizationProc8V137:
     mov     r11, qword ptr [rip + localizationProc8CallAddress]
     call    r11
 
-    mov     r11, qword ptr [rip + localizationProc8ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + localizationProc8ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

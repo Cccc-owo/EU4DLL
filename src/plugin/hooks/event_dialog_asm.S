@@ -66,12 +66,12 @@ eventDialogProc1V137:
     mov		qword ptr [rip + eventDialogProc1Flag], 0x1
 
 .LeventDialogProc1_JMP_E:
-    # r11 is used as data; push return address first using rdx as scratch (rdx not needed after)
-    mov     rdx, qword ptr [rip + eventDialogProc1ReturnAddress]
-    push    rdx
     mov     r11, qword ptr [r13+rax*8+0x120]
     movss   xmm1, dword ptr [r13+0x968]
     test    r11, r11
+    push    rax
+    mov     rax, qword ptr [rip + eventDialogProc1ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl eventDialogProc2V137
@@ -86,13 +86,15 @@ eventDialogProc2V137:
     jnz			.LeventDialogProc2_JMP_B
 
 .LeventDialogProc2_JMP_A:
-    mov		r11, qword ptr [rip + eventDialogProc2ReturnAddress2]
-    push		r11
+    push    rax
+    mov     rax, qword ptr [rip + eventDialogProc2ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 .LeventDialogProc2_JMP_B:
-    mov		r11, qword ptr [rip + eventDialogProc2ReturnAddress1]
-    push		r11
+    push    rax
+    mov     rax, qword ptr [rip + eventDialogProc2ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl eventDialogProc3V137
@@ -106,6 +108,7 @@ eventDialogProc3V137:
     mov     r9d, [rbx+0x10]
     cmp     edi, r9d
     mov     ecx, [rbp+0x1060+0x10]
-    mov		r11, qword ptr [rip + eventDialogProc3ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + eventDialogProc3ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

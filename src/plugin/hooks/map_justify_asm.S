@@ -79,8 +79,9 @@ mapJustifyProc1V137:
 .LmapJustifyProc1_JMP_I:
     mov     r14, qword ptr [rdx+rax*8]
     test    r14, r14
-    mov     r11, qword ptr [rip + mapJustifyProc1ReturnAddress1]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + mapJustifyProc1ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mapJustifyProc2V137
@@ -108,8 +109,9 @@ mapJustifyProc2V137:
     cvtdq2ps xmm6, xmm6
     movd    xmm1, eax
 
-    mov     r11, qword ptr [rip + mapJustifyProc2ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + mapJustifyProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mapJustifyProc4V137
@@ -130,6 +132,7 @@ mapJustifyProc4V137:
     mov     dword ptr [rbp+0x7B0+0x38], esi
     mov     qword ptr [rbp+0x7B0-0x698], rcx
 
-    mov     r11, qword ptr [rip + mapJustifyProc4ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + mapJustifyProc4ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

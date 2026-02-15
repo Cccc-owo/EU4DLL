@@ -67,8 +67,9 @@ mainTextProc1V137:
     movss   xmm3, dword ptr [r14+0x968]
     mov     rdx, qword ptr [r14+r8*8+0x120]
 
-    mov		r11, qword ptr [rip + mainTextProc1ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mainTextProc1ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mainTextProc2V137
@@ -131,9 +132,9 @@ mainTextProc2V137:
 
     mov		dword ptr [rip + mainTextProc2TmpCharacter], eax
 
-    # r11 is used as data in this proc; use rdx as scratch for return address
-    mov		rdx, qword ptr [rip + mainTextProc2ReturnAddress]
-    push	rdx
+    push    rax
+    mov     rax, qword ptr [rip + mainTextProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mainTextProc3
@@ -146,16 +147,18 @@ mainTextProc3:
     cmp		dword ptr [rip + mainTextProc2TmpCharacter], 0x0FF
     ja		.LmainTextProc3_JMP_B
 
-    mov		r11, qword ptr [rip + mainTextProc3ReturnAddress2]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mainTextProc3ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 .LmainTextProc3_JMP_B:
     lea     eax, dword ptr [rbx+rbx]
     movd    xmm1, eax
 
-    mov		r11, qword ptr [rip + mainTextProc3ReturnAddress1]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mainTextProc3ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     ret
 
 
@@ -176,6 +179,7 @@ mainTextProc4V137:
     mov     [rbp+0x2340-0x2340], rcx
     test	rcx,rcx
 
-    mov		r11, qword ptr [rip + mainTextProc4ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mainTextProc4ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

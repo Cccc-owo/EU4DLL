@@ -27,6 +27,7 @@ fontBufferHeapZeroClear:
     mov		rax, qword ptr [rip + fontBufferHeapZeroClearHeepAllocJmpAddress]
     call	qword ptr [rax]
     test	rax,rax
-    mov		r11, qword ptr [rip + fontBufferHeapZeroClearReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + fontBufferHeapZeroClearReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

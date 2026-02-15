@@ -54,8 +54,9 @@ inputProc1V137:
     or		bl, al
 
 .LinputProc1_JMP_Y:
-    mov		r11, qword ptr [rip + inputProc1ReturnAddress1]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + inputProc1ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     ret
 
 .LinputProc1_JMP_A:
@@ -107,8 +108,9 @@ inputProc1V137:
 .LinputProc1_JMP_C:
     mov		rdi, qword ptr [rip + inputProc1Tmp]
 
-    mov		r11, qword ptr [rip + inputProc1ReturnAddress2]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + inputProc1ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl inputProc2V137
@@ -166,6 +168,7 @@ inputProc2V137:
 .LinputProc2_JMP_F:
     mov		rsi, qword ptr [rip + inputProc2Tmp2]
 
-    mov		r11, qword ptr [rip + inputProc2ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + inputProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

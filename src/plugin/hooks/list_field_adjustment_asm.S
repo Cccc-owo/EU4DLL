@@ -73,8 +73,9 @@ listFieldAdjustmentProc1V137:
     mov     r12, qword ptr [r8+rax*8]
     test    r12, r12
 
-    mov     r11, qword ptr [rip + listFieldAdjustmentProc1ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + listFieldAdjustmentProc1ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl listFieldAdjustmentProc2V137
@@ -95,8 +96,9 @@ listFieldAdjustmentProc2V137:
 
     mov     dword ptr [rip + listFieldAdjustmentProc2length], ebx
 
-    mov     r11, qword ptr [rip + listFieldAdjustmentProc2ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + listFieldAdjustmentProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl listFieldAdjustmentProc3V137A
@@ -114,8 +116,9 @@ listFieldAdjustmentProc3V137A:
     lea     rdx, qword ptr [rbp+0x100-0x168]
     mov     rcx, rdi
 
-    mov     r11, qword ptr [rip + listFieldAdjustmentProc3ReturnAddressA]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + listFieldAdjustmentProc3ReturnAddressA]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl listFieldAdjustmentProc3V137B
@@ -133,6 +136,7 @@ listFieldAdjustmentProc3V137B:
     lea     rdx, qword ptr [rbp+0x100-0x168]
     mov     rcx, rdi
 
-    mov     r11, qword ptr [rip + listFieldAdjustmentProc3ReturnAddressB]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + listFieldAdjustmentProc3ReturnAddressB]
+    xchg    qword ptr [rsp], rax
     ret

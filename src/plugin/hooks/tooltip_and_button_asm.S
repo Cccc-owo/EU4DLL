@@ -77,8 +77,9 @@ tooltipAndButtonProc1V137:
     mov		cx, word ptr [rcx+1]
     mov		word ptr [rax+1], cx
 .LttbProc1_JMP_B:
-    mov		r11, qword ptr [rip + tooltipAndButtonProc1ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc1ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl tooltipAndButtonProc2V137
@@ -128,10 +129,10 @@ tooltipAndButtonProc2V137:
 
 .LttbProc2_JMP_G:
     mov		dword ptr [rip + tooltipAndButtonProc2TmpCharacter], eax
-    # r11 is used as data; push return address first using rdx (not used as index here)
-    mov     rdx, qword ptr [rip + tooltipAndButtonProc2ReturnAddress]
-    push    rdx
     mov     r11, [rcx+rax*8]
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     test    r11, r11
     ret
 
@@ -184,8 +185,9 @@ tooltipAndButtonProc3V137:
     mov     r8, [rdx+rax*8]
     mov     [rbp+0x2190-0x2138], r8
 
-    mov		r11, qword ptr [rip + tooltipAndButtonProc3ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc3ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl tooltipAndButtonProc4V137
@@ -203,14 +205,16 @@ tooltipAndButtonProc4V137:
     cmp		dword ptr [rip + tooltipAndButtonProc2TmpCharacter], 0x0FF
     ja		.LttbProc4_JMP_Y
 
-    mov		r11, qword ptr [rip + tooltipAndButtonProc4ReturnAddress1]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc4ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     ret
 
 
 .LttbProc4_JMP_B:
-    mov		r11, qword ptr [rip + tooltipAndButtonProc4ReturnAddress2]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc4ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 .LttbProc4_JMP_Y:
@@ -229,15 +233,17 @@ tooltipAndButtonProc4V137:
     comiss  xmm1, xmm0
     jb      .LttbProc4_JMP_B
 
-    mov		r11, qword ptr [rip + tooltipAndButtonProc4ReturnAddress3]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc4ReturnAddress3]
+    xchg    qword ptr [rsp], rax
     ret
 
 
 .LttbProc4_JMP_X:
     nop
-    mov		r11, qword ptr [rip + tooltipAndButtonProc4ReturnAddress2]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc4ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 
@@ -290,17 +296,18 @@ tooltipAndButtonProc5V137:
     dec		edi
 
 .LttbProc5_JMP_G:
-    # r11 is used as data; push return address first using rax (not used as index here)
-    mov     rax, qword ptr [rip + tooltipAndButtonProc5ReturnAddress1]
-    push    rax
     mov     r11, [rcx+rdx*8]
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc5ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     test    r11, r11
     ret
 
 .LttbProc5_JMP_J:
     movd    xmm0, eax
-    mov		r11, qword ptr [rip + tooltipAndButtonProc5ReturnAddress2]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc5ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl tooltipAndButtonProc7V137
@@ -315,11 +322,13 @@ tooltipAndButtonProc7V137:
     cmp     r14d, dword ptr [rbp+0x2190-0x21B8]
     jl		.LttbProc7_JMP_B
     mov     r15d, dword ptr [rbp+0x2190+0x38]
-    mov		r11, qword ptr [rip + tooltipAndButtonProc7ReturnAddress2]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc7ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 .LttbProc7_JMP_B:
-    mov		r11, qword ptr [rip + tooltipAndButtonProc7ReturnAddress1]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + tooltipAndButtonProc7ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     ret

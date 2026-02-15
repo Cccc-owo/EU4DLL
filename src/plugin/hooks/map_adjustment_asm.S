@@ -11,7 +11,7 @@
 .set SHIFT_4, 0x8F2
 .set NO_FONT, 0x98F
 .set NOT_DEF, 0x2026
-.set MAP_LIMIT, 0x2D-3
+.set MAP_LIMIT, 0x2D-1
 
 .extern mapAdjustmentProc1ReturnAddressA
 .extern mapAdjustmentProc1ReturnAddressB
@@ -53,8 +53,9 @@ mapAdjustmentProc1V137A:
 .LmapAdjProc1A_JMP_B:
     mov     eax, edi
 
-    mov		r11, qword ptr [rip + mapAdjustmentProc1ReturnAddressA]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mapAdjustmentProc1ReturnAddressA]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mapAdjustmentProc1V137B
@@ -82,8 +83,9 @@ mapAdjustmentProc1V137B:
 .LmapAdjProc1B_JMP_B:
     mov     eax, edi
 
-    mov		r11, qword ptr [rip + mapAdjustmentProc1ReturnAddressB]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mapAdjustmentProc1ReturnAddressB]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mapAdjustmentProc2V137
@@ -124,8 +126,9 @@ mapAdjustmentProc2V137:
     add		rbx, 2
 
 .LmapAdjProc2_JMP_C:
-    mov		r11, qword ptr [rip + mapAdjustmentProc2ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mapAdjustmentProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mapAdjustmentProc3V137
@@ -139,13 +142,15 @@ mapAdjustmentProc3V137:
     mov     r8, [rbp+0x230-0x1B0]
     lea     rcx, [rbp+0x230-0x200]
 
-    mov		r11, qword ptr [rip + mapAdjustmentProc3ReturnAddress1]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mapAdjustmentProc3ReturnAddress1]
+    xchg    qword ptr [rsp], rax
     ret
 
 .LmapAdjProc3_JMP_A:
-    mov		r11, qword ptr [rip + mapAdjustmentProc3ReturnAddress2]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mapAdjustmentProc3ReturnAddress2]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mapAdjustmentProc4V137
@@ -196,6 +201,7 @@ mapAdjustmentProc4V137:
 
 .LmapAdjProc4_JMP_E:
 
-    mov		r11, qword ptr [rip + mapAdjustmentProc4ReturnAddress]
-    push	r11
+    push    rax
+    mov     rax, qword ptr [rip + mapAdjustmentProc4ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret

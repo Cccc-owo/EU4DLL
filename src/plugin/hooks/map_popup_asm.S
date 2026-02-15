@@ -65,8 +65,9 @@ mapPopupProc1V137:
     mov     dword ptr [rax], ecx
 
 .LmapPopupProc1_JMP_B:
-    mov     r11, qword ptr [rip + mapPopupProc1ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + mapPopupProc1ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mapPopupProc2V137
@@ -114,8 +115,9 @@ mapPopupProc2V137:
     mov     r12, qword ptr [r15+rax*8+0x120]
     test    r12, r12
 
-    mov     r11, qword ptr [rip + mapPopupProc2ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + mapPopupProc2ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
 
 .globl mapPopupProc3V137
@@ -163,6 +165,7 @@ mapPopupProc3V137:
     mov     r13, qword ptr [r15+rax*8+0x120]
     test    r13, r13
 
-    mov     r11, qword ptr [rip + mapPopupProc3ReturnAddress]
-    push    r11
+    push    rax
+    mov     rax, qword ptr [rip + mapPopupProc3ReturnAddress]
+    xchg    qword ptr [rsp], rax
     ret
