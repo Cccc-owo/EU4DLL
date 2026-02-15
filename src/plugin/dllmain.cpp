@@ -21,7 +21,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 			// UTF-8 auto conversion (IAT hook)
 			FileRead::Init(options);
 
-			// Steam rich presence text fix (IAT hook)
+			// Steam rich presence text fix (vtable hook)
 			SteamRichPresence::Init();
 
 			// Font loading
