@@ -1,7 +1,6 @@
-#include "plugin64.h"
+#include "byte_pattern.h"
+#include "injector.h"
 #include "plugin_64.h"
-
-using namespace std;
 
 namespace Version {
 	typedef struct _Pattern {

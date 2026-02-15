@@ -1,4 +1,5 @@
 #include "escape_tool.h"
+#include <cstdlib>
 
 inline wchar_t UCS2ToCP1252(int cp) {
 	wchar_t result = cp;

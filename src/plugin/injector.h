@@ -24,7 +24,14 @@
  *
  */
 #pragma once
-#include "plugin64.h"
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <cstdint>
+#include <cstddef>
+#include <cstring>
 
 namespace Injector
 {
