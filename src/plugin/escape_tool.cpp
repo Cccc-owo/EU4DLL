@@ -1,4 +1,3 @@
-#include "plugin64.h"
 #include "escape_tool.h"
 
 inline wchar_t UCS2ToCP1252(int cp) {

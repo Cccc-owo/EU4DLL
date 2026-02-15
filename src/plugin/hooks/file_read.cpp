@@ -1,4 +1,3 @@
-#include "../plugin64.h"
 #include "../plugin_64.h"
 #include "../iat_hook.h"
 #include "../escape_tool.h"
