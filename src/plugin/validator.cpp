@@ -13,7 +13,7 @@ namespace Validator {
 			const WCHAR* msg = L"Multibyte DLL hasn't supported this game version yet.\n"
 				  L"\n"
 				  L"DLL announce page:\n"
-				  L"https://github.com/matanki-saito/EU4dll";
+				  L"https://github.com/Cccc-owo/EU4dll";
 
 			// Try MessageBox, but don't fail hard if it doesn't work (Wine without X11)
 			MessageBoxW(NULL, msg, caption, MB_OK);
