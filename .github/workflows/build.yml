@@ -21,7 +21,7 @@ jobs:
           sudo apt-get install -y mingw-w64
 
       - name: Configure
-        run: cmake -B build -S src -DCMAKE_TOOLCHAIN_FILE=src/toolchain/mingw-w64-x86_64.cmake
+        run: cmake -B build -S src -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/src/toolchain/mingw-w64-x86_64.cmake
 
       - name: Build
         run: cmake --build build -j$(nproc)
@@ -51,7 +51,7 @@ jobs:
 
       - name: Configure & Build
         run: |
-          cmake -B build -S src -DCMAKE_TOOLCHAIN_FILE=src/toolchain/mingw-w64-x86_64.cmake
+          cmake -B build -S src -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/src/toolchain/mingw-w64-x86_64.cmake
           cmake --build build -j$(nproc)
 
       - name: Package

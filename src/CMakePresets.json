@@ -2,16 +2,37 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "mingw-w64",
-      "displayName": "MinGW-w64 Cross Compile",
+      "name": "mingw-w64-linux",
+      "displayName": "MinGW-w64 (Linux Cross Compile)",
       "binaryDir": "${sourceDir}/../build",
-      "toolchainFile": "${sourceDir}/toolchain/mingw-w64-x86_64.cmake"
+      "toolchainFile": "${sourceDir}/toolchain/mingw-w64-x86_64.cmake",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "mingw-w64-windows",
+      "displayName": "MinGW-w64 (Windows)",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/../build",
+      "toolchainFile": "${sourceDir}/toolchain/mingw-w64-x86_64.cmake",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     }
   ],
   "buildPresets": [
     {
-      "name": "mingw-w64",
-      "configurePreset": "mingw-w64"
+      "name": "mingw-w64-linux",
+      "configurePreset": "mingw-w64-linux"
+    },
+    {
+      "name": "mingw-w64-windows",
+      "configurePreset": "mingw-w64-windows"
     }
   ]
 }
