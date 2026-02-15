@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, develop]
   pull_request:
-    branches: [master, develop]
+    branches: [main, develop]
 
 jobs:
   build:
@@ -14,6 +14,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set short SHA
+        id: vars
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Install MinGW-w64
         run: |
@@ -32,36 +36,35 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EU4dll-${{ github.sha }}
+          name: EU4dll-${{ github.run_number }}-${{ steps.vars.outputs.short_sha }}
           path: build/package/
 
   release:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Set short SHA
+        id: vars
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      - name: Install MinGW-w64
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mingw-w64
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: EU4dll-${{ github.run_number }}-${{ steps.vars.outputs.short_sha }}
+          path: artifact/
 
-      - name: Configure & Build
-        run: |
-          cmake -B build -S src -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/src/toolchain/mingw-w64-x86_64.cmake
-          cmake --build build -j$(nproc)
-
-      - name: Package
-        run: |
-          cmake --build build --target package
-          cd build/package && zip -r ../../EU4dll-${{ github.run_number }}.zip .
+      - name: Package for release
+        run: cd artifact && zip -r ../steam_EU4_fixdll_enhanced_build_${{ github.run_number }}.zip .
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
           name: Release ${{ github.run_number }}
-          files: EU4dll-${{ github.run_number }}.zip
+          body: |
+            Build ${{ github.run_number }} from commit ${{ github.sha }}
+          files: steam_EU4_fixdll_enhanced_build_${{ github.run_number }}.zip
