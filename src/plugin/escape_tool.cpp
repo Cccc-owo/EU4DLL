@@ -363,7 +363,8 @@ void utf8ToEscapedStrP(ParadoxTextObject* src) {
 	convertTextToWideText(src->getString().c_str(), &tmp1);
 	convertWideTextToEscapedText(tmp1, &tmp2);
 
-	src->setString(new std::string(tmp2));
+	std::string escaped(tmp2);
+	src->setString(&escaped);
 
 	free(tmp1);
 	free(tmp2);
