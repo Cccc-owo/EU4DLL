@@ -23,7 +23,7 @@ namespace MapAdjustment {
 	bool mapAdjustmentProc1Injector() {
 		// movsx   ecx, byte ptr [rax+rbp]
 		BytePattern::temp_instance().find_pattern("0F BE 0C 28 48 8D 1C 28 E8 ? ? ? ? FF C7");
-		if (BytePattern::temp_instance().has_size(2, "マップ文字の大文字化キャンセル")) {
+		if (BytePattern::temp_instance().has_size(2, "cancel map text uppercasing")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			mapAdjustmentProc1CallAddressA = Injector::GetBranchDestination(address + 0x08);
@@ -45,7 +45,7 @@ namespace MapAdjustment {
 	bool mapAdjustmentProc2Injector() {
 		// lea     rax, [rbp+230h+Block]
 		BytePattern::temp_instance().find_pattern("48 8D 85 90 00 00 00 49 83 FD 10 48 0F 43 C6 0F B6 04 18");
-		if (BytePattern::temp_instance().has_size(1, "文字チェック修正")) {
+		if (BytePattern::temp_instance().has_size(1, "char check fix")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			mapAdjustmentProc2ReturnAddress = address + 0x2B;
@@ -61,7 +61,7 @@ namespace MapAdjustment {
 
 		// lea     rdx, [rbp+230h+var_1C0]
 		BytePattern::temp_instance().find_pattern("48 8D 55 70 48 83 FF 10");
-		if (BytePattern::temp_instance().has_size(1, "文字チェックの後のコピー処理")) {
+		if (BytePattern::temp_instance().has_size(1, "copy after char check")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			mapAdjustmentProc3ReturnAddress1 = address + 0x18;
@@ -74,7 +74,7 @@ namespace MapAdjustment {
 
 		// mov     rax, [rbp+230h+arg_0]
 		BytePattern::temp_instance().find_pattern("48 8B 85 40 02 00 00 48 8B 48 30");
-		if (BytePattern::temp_instance().has_size(1, "文字チェックの後のコピー処理の戻り先２")) {
+		if (BytePattern::temp_instance().has_size(1, "copy after char check return address 2")) {
 			mapAdjustmentProc3ReturnAddress2 = BytePattern::temp_instance().get_first().address();
 		}
 		else {
@@ -87,7 +87,7 @@ namespace MapAdjustment {
 	bool mapAdjustmentProc4Injector() {
 		//  lea     rax, [rbp+230h+Block]
 		BytePattern::temp_instance().find_pattern("48 8D 85 90 00 00 00 49 83 FD 10 48 0F 43 C6 0F B6 04 08");
-		if (BytePattern::temp_instance().has_size(1, "文字取得処理修正")) {
+		if (BytePattern::temp_instance().has_size(1, "char fetch fix")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			mapAdjustmentProc4ReturnAddress = address + 0x13;

@@ -27,7 +27,7 @@ namespace TooltipAndButton {
 	bool tooltipAndButtonProc1Injector() {
 		// movzx   r8d, byte ptr [rax+rbx]
 		BytePattern::temp_instance().find_pattern("44 0F B6 04 18 BA 01 00 00 00");
-		if (BytePattern::temp_instance().has_size(1, "処理ループ１の文字コピー")) {
+		if (BytePattern::temp_instance().has_size(1, "char copy in processing loop 1")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			tooltipAndButtonProc1CallAddress = Injector::GetBranchDestination(address + 0x0F);
@@ -42,7 +42,7 @@ namespace TooltipAndButton {
 	bool tooltipAndButtonProc2Injector() {
 		// mov     r9d, r14d
 		BytePattern::temp_instance().find_pattern("45 8B CE 41 0F B6 04 01");
-		if (BytePattern::temp_instance().has_size(1, "処理ループ１の文字取得")) {
+		if (BytePattern::temp_instance().has_size(1, "char fetch in processing loop 1")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			tooltipAndButtonProc2ReturnAddress = address + 0xF;
@@ -56,7 +56,7 @@ namespace TooltipAndButton {
 	bool tooltipAndButtonProc3Injector() {
 		// mov     ecx, r15d
 		BytePattern::temp_instance().find_pattern("41 8B CF F3 44 0F 10 9A 48 08 00 00");
-		if (BytePattern::temp_instance().has_size(1, "処理ループ２の文字取得")) {
+		if (BytePattern::temp_instance().has_size(1, "char fetch in processing loop 2")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			tooltipAndButtonProc3ReturnAddress = address + 0x18;
@@ -70,7 +70,7 @@ namespace TooltipAndButton {
 	bool tooltipAndButtonProc4Injector() {
 		// cmp     word ptr [r11+6], 0
 		BytePattern::temp_instance().find_pattern("66 41 83 7B 06 00 0F 85 E0 03");
-		if (BytePattern::temp_instance().has_size(1, "処理ループ１の改行処理")) {
+		if (BytePattern::temp_instance().has_size(1, "line break in processing loop 1")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			tooltipAndButtonProc4ReturnAddress1 = Injector::GetBranchDestination(address + 0x6);
@@ -88,7 +88,7 @@ namespace TooltipAndButton {
 
 		// movaps  xmm8, [rsp+0F8h+var_58]
 		BytePattern::temp_instance().find_pattern("44 0F 28 84 24 A0 00 00 00 0F 28 BC 24 B0 00 00 00 48");
-		if (BytePattern::temp_instance().has_size(1, "ツールチップの改行処理のリターン先２")) {
+		if (BytePattern::temp_instance().has_size(1, "tooltip line break return address 2")) {
 			tooltipAndButtonProc5ReturnAddress2 = BytePattern::temp_instance().get_first().address();
 		}
 		else {
@@ -97,7 +97,7 @@ namespace TooltipAndButton {
 
 		// movzx   edx, byte ptr [rbx+rbp]
 		BytePattern::temp_instance().find_pattern("0F B6 14 2B 49 8D 8F 20 01 00 00");
-		if (BytePattern::temp_instance().has_size(1, "ツールチップの改行処理")) {
+		if (BytePattern::temp_instance().has_size(1, "tooltip line break")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			tooltipAndButtonProc5ReturnAddress1 = address + 0x12;
@@ -114,7 +114,7 @@ namespace TooltipAndButton {
 	bool tooltipAndButtonProc6Injector() {
 		// nbsp
 		BytePattern::temp_instance().find_pattern("A7 52 2D 20 00 00 00 00");
-		if (BytePattern::temp_instance().has_size(1, "空白をノーブレークスペースに変換")) {
+		if (BytePattern::temp_instance().has_size(1, "convert space to non-breaking space")) {
 			Injector::WriteMemory<uint8_t>(BytePattern::temp_instance().get_first().address() + 3, 0xA0, true);
 			return false;
 		}
@@ -124,7 +124,7 @@ namespace TooltipAndButton {
 	bool tooltipAndButtonProc7Injector() {
 		// inc     r14d
 		BytePattern::temp_instance().find_pattern("41 FF C6 44 3B 75 D8");
-		if (BytePattern::temp_instance().has_size(1, "カウントアップ")) {
+		if (BytePattern::temp_instance().has_size(1, "counter increment")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			tooltipAndButtonProc7ReturnAddress1 = Injector::GetBranchDestination(address + 0x7);

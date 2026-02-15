@@ -13,7 +13,7 @@ namespace CBitmapFont {
 	bool cBitmapFontProc1Injector() {
 		// movzx   eax, byte ptr [rdi+rax]
 		BytePattern::temp_instance().find_pattern("0F B6 04 07 49 8B 8C C6 20 01 00 00");
-		if (BytePattern::temp_instance().has_size(1, "CBitmapFont文字取得1")) {
+		if (BytePattern::temp_instance().has_size(1, "CBitmapFont char fetch 1")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			cBitmapFontProc1ReturnAddress = address + 0x0F;
@@ -27,7 +27,7 @@ namespace CBitmapFont {
 	bool cBitmapFontProc2Injector() {
 		// movss   xmm6, dword ptr [r14+848h]
 		BytePattern::temp_instance().find_pattern("F3 41 0F 10 B6 48 08 00 00 0F B6 04 02 4D 8B 3C C6");
-		if (BytePattern::temp_instance().has_size(1, "CBitmapFont文字取得2")) {
+		if (BytePattern::temp_instance().has_size(1, "CBitmapFont char fetch 2")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			cBitmapFontProc2ReturnAddress = address + 0x14;

@@ -18,7 +18,7 @@ namespace MapView {
 	bool mapViewProc1Injector() {
 		// movss   [rbp+1060h+var_10C0], xmm3
 		BytePattern::temp_instance().find_pattern("F3 0F 11 5D A0 41 0F B6 04 01 49 8B 14 C7");
-		if (BytePattern::temp_instance().has_size(1, "処理ループ２の文字取得処理")) {
+		if (BytePattern::temp_instance().has_size(1, "char fetch in processing loop 2")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			mapViewProc1ReturnAddress = address + 0x11;
@@ -32,7 +32,7 @@ namespace MapView {
 	bool mapViewProc2Injector() {
 		// movzx   eax, byte ptr [r15+rax]
 		BytePattern::temp_instance().find_pattern("41 0F B6 04 07 4D 8B 9C C1 20 01 00 00");
-		if (BytePattern::temp_instance().has_size(1, "処理ループ１の文字取得処理")) {
+		if (BytePattern::temp_instance().has_size(1, "char fetch in processing loop 1")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			mapViewProc2ReturnAddress = address + 0x10;
@@ -46,7 +46,7 @@ namespace MapView {
 	bool mapViewProc3Injector() {
 		// movzx   r8d, byte ptr [r15+rax]
 		BytePattern::temp_instance().find_pattern("45 0F B6 04 07 BA 01 00 00 00");
-		if (BytePattern::temp_instance().has_size(1, "処理ループ１の文字コピー")) {
+		if (BytePattern::temp_instance().has_size(1, "char copy in processing loop 1")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			// call {sub_xxxxx}

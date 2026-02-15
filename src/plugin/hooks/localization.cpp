@@ -47,7 +47,7 @@ namespace Localization {
 		return p1;
 	}
 
-	// M, Y -> Y年M
+	// M, Y -> YyM
 	void* localizationProc6Call(ParadoxTextObject* p1, ParadoxTextObject* p2, ParadoxTextObject* p3) {
 		auto text = p3->getString() + std::string("\x0F") + p2->getString().substr(0, p2->len - 2);
 
@@ -58,7 +58,7 @@ namespace Localization {
 		return p1;
 	}
 
-	// M Y -> Y年M
+	// M Y -> YyM
 	void* localizationProc8Call(ParadoxTextObject* p1, ParadoxTextObject* p2, ParadoxTextObject* p3) {
 		auto text = p3->getString() + std::string("\x0F") + p2->getString().substr(0, p2->len - 1);
 
@@ -74,7 +74,7 @@ namespace Localization {
 
 		// movdqu  xmmword ptr [rbp+Size], xmm0
 		BytePattern::temp_instance().find_pattern("F3 0F 7F 45 E8 ? ? ? ? 49 C7 C0 FF FF FF FF 0F 1F 44 00 00");
-		if (BytePattern::temp_instance().has_size(1, "Battle of areaを逆転させる")) {
+		if (BytePattern::temp_instance().has_size(1, "reverse Battle of area")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address(0x48);
 
 			localizationProc2ReturnAddress = address + 0x1A;
@@ -89,7 +89,7 @@ namespace Localization {
 	bool localizationProc5Injector() {
 		// mov     rdx, [rdi+68h]
 		BytePattern::temp_instance().find_pattern("48 8B 57 68 48 83 C2 08 48 89 75 B8 48 C7 45 D0 0F 00 00 00");
-		if (BytePattern::temp_instance().has_size(1, "nameを逆転させる")) {
+		if (BytePattern::temp_instance().has_size(1, "reverse name order")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address(0x40);
 
 			localizationProc5ReturnAddress = address + 0x1A;
@@ -104,7 +104,7 @@ namespace Localization {
 	bool localizationProc6Injector() {
 		// lea     r8, [rbp+57h+var_78]
 		BytePattern::temp_instance().find_pattern("4C 8D 45 DF 48 8D 55 BF 48 8D 4D 1F");
-		if (BytePattern::temp_instance().has_size(3, "M, Y → Y年M")) {
+		if (BytePattern::temp_instance().has_size(3, "M, Y -> YyM")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			localizationProc6ReturnAddress = address + 0x11;
@@ -119,7 +119,7 @@ namespace Localization {
 	bool localizationProc8Injector() {
 		// nop
 		BytePattern::temp_instance().find_pattern("90 4C 8D 44 24 40 48 8B D0 48 8B CF E8 ? ? ? ? 90");
-		if (BytePattern::temp_instance().has_size(2, "M Y → Y年M")) {
+		if (BytePattern::temp_instance().has_size(2, "M Y -> YyM")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			localizationProc8ReturnAddress = address + 0x11;
@@ -197,10 +197,10 @@ namespace Localization {
 		// proc4: no-op for v1.37
 		// Name reversal
 		result.add("localizationProc5Injector", localizationProc5Injector());
-		// M, Y -> Y年M
+		// M, Y -> YyM
 		result.add("localizationProc6Injector", localizationProc6Injector());
 		// proc7: no-op for v1.37
-		// M Y -> Y年M
+		// M Y -> YyM
 		result.add("localizationProc8Injector", localizationProc8Injector());
 		// proc9: no-op for v1.37
 		// £no/£yes nbsp

@@ -11,7 +11,7 @@ namespace MapNudgeView {
 	bool mapNudgeViewProc1Injector() {
 		// movzx   eax, byte ptr [rcx+rax]
 		BytePattern::temp_instance().find_pattern("0F B6 04 01 49 8B 94 C4 20 01 00 00 48 85 D2");
-		if (BytePattern::temp_instance().has_size(1, "文字取得処理")) {
+		if (BytePattern::temp_instance().has_size(1, "char fetch")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			mapNudgeViewProc1ReturnAddress = address + 0x0F;

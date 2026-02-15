@@ -1,4 +1,4 @@
-#include "plugin64.h"
+#include "byte_pattern.h"
 #include "plugin_64.h"
 
 namespace Validator {
@@ -9,26 +9,11 @@ namespace Validator {
 		BytePattern::LoggingInfo(message);
 
 		if (e.hasError()) {
-			const WCHAR* msg;
-			const WCHAR* caption;
-
-			const DWORD sysDefLcid = ::GetSystemDefaultLCID();
-
-			switch (sysDefLcid) {
-			case MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN):
-				caption = L"エラー";
-				msg = L"このバージョンはまだ日本語化に対応していないため起動できません。\n"
-					  L"https://github.com/matanki-saito/EU4dll";
-				break;
-
-			case MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US):
-			default:
-				caption = L"ERROR";
-				msg = L"Multibyte DLL hasn't supported this game version yet.\n"
-					  L"\n"
-					  L"DLL announce page:\n"
-					  L"https://github.com/matanki-saito/EU4dll";
-			}
+			const WCHAR* caption = L"ERROR";
+			const WCHAR* msg = L"Multibyte DLL hasn't supported this game version yet.\n"
+				  L"\n"
+				  L"DLL announce page:\n"
+				  L"https://github.com/matanki-saito/EU4dll";
 
 			// Try MessageBox, but don't fail hard if it doesn't work (Wine without X11)
 			MessageBoxW(NULL, msg, caption, MB_OK);
@@ -47,25 +32,9 @@ namespace Validator {
 		bool detected = Version::DetectVersion();
 
 		if (!detected) {
-			const WCHAR* msg;
-			const WCHAR* caption;
-
-			const DWORD sysDefLcid = ::GetSystemDefaultLCID();
-
-			switch (sysDefLcid) {
-			case MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN):
-				caption = L"未対応バージョン";
-				msg = L"日本語化dllはこのバージョンに未対応です。"
-					  L"起動を優先しますか？";
-				break;
-
-			case MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US):
-			default:
-				caption = L"NO SUPPORT VERSION";
-				msg = L"Multibyte DLL hasn't supported this game version yet.\n"
-					  L"Do you want to start a game?";
-				break;
-			}
+			const WCHAR* caption = L"UNSUPPORTED VERSION";
+			const WCHAR* msg = L"Multibyte DLL hasn't supported this game version yet.\n"
+				  L"Do you want to start the game anyway?";
 
 			int result = MessageBoxW(NULL, msg, caption, MB_YESNO);
 

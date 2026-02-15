@@ -34,7 +34,7 @@ namespace Ime {
 	bool imeProc1Injector() {
 		// mov     edx, edi
 		BytePattern::temp_instance().find_pattern("8B D7 49 8B CC E8 ? ? ? ? 85 C0 0F 85 5B");
-		if (BytePattern::temp_instance().has_size(1, "SDL_windowsevents.cの修正")) {
+		if (BytePattern::temp_instance().has_size(1, "SDL_windowsevents.c fix")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			imeProc1CallAddress = Injector::GetBranchDestination(address + 0x5);
@@ -66,7 +66,7 @@ namespace Ime {
 
 		// WM_IME_STARTCOMPOSITION
 		BytePattern::temp_instance().find_pattern("81 EA BC 00 00 00 0F 84 C3 02 00 00");
-		if (BytePattern::temp_instance().has_size(1, "SDL_windowskeyboard.cの修正")) {
+		if (BytePattern::temp_instance().has_size(1, "SDL_windowskeyboard.c fix")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			imeProc2ReturnAddress1 = Injector::GetBranchDestination(address + 0x6);
@@ -82,7 +82,7 @@ namespace Ime {
 		// WM_IME_SETCONTEXT: NOP *lParam = 0
 		// mov     [r9], r13
 		BytePattern::temp_instance().find_pattern("4D 89 29 48 8B 5C 24 50");
-		if (BytePattern::temp_instance().has_size(1, "SDL_windowskeyboard.cの修正")) {
+		if (BytePattern::temp_instance().has_size(1, "SDL_windowskeyboard.c fix")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 			Injector::MakeNOP(address, 3, true);
 		}
@@ -93,7 +93,7 @@ namespace Ime {
 		// WM_IME_COMPOSITION: skip IME_GetCompositionString and IME_SendInputEvent
 		// mov     r8d, 800h
 		BytePattern::temp_instance().find_pattern("41 B8 00 08 00 00 48 89 7C 24 58");
-		if (BytePattern::temp_instance().has_size(1, "SDL_windowskeyboard.cの修正")) {
+		if (BytePattern::temp_instance().has_size(1, "SDL_windowskeyboard.c fix")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address(-2);
 			Injector::MakeJMP(address, (void*)(address + 0x9D), true);
 		}
@@ -107,7 +107,7 @@ namespace Ime {
 	bool imeProc3Injector() {
 		// mov     rcx, [rbp+0C0h+hRawInput]
 		BytePattern::temp_instance().find_pattern("48 8B 8D F8 00 00 00 48 8B D6 E8 ? ? ? ? 33");
-		if (BytePattern::temp_instance().has_size(2, "SDL_windowsevents.cの修正")) {
+		if (BytePattern::temp_instance().has_size(2, "SDL_windowsevents.c fix")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			imeProc3CallAddress1 = Injector::GetBranchDestination(address + 0xA);

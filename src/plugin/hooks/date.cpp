@@ -13,7 +13,7 @@ namespace Date {
 		if (BytePattern::temp_instance().has_size(1, "DateFormat")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
-			// y 0x0F m w d 0x0E  →  ex) 1444年11月11日
+			// y 0x0F m w d 0x0E  →  ex) 1444y11m11d
 			char dateFormat[] = { 'y', ' ', 0x0F, ' ', 'm', 'w', ' ', 'd', ' ', 0x0E, 0 };
 			Injector::WriteMemoryRaw(address, dateFormat, sizeof(dateFormat), true);
 			failed = false;

@@ -35,7 +35,7 @@ namespace FileSave {
 	bool fileSaveProc1Injector() {
 		// mov     eax, [rcx+10h]
 		BytePattern::temp_instance().find_pattern("8B 41 10 85 C0 0F 84 0C 01 00 00");
-		if (BytePattern::temp_instance().has_size(1, "ファイル名を安全にしている場所を短絡する")) {
+		if (BytePattern::temp_instance().has_size(1, "bypass filename sanitization")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			fileSaveProc1ReturnAddress = Injector::GetBranchDestination(address + 0x5);
@@ -49,7 +49,7 @@ namespace FileSave {
 	bool fileSaveProc2Injector() {
 		// cmp     qword ptr [rax+18h], 10h
 		BytePattern::temp_instance().find_pattern("48 83 78 18 10 72 03 48 8B 00 4C 89 65 D7");
-		if (BytePattern::temp_instance().has_size(3, "ファイル名をUTF-8に変換して保存できるようにする")) {
+		if (BytePattern::temp_instance().has_size(3, "convert filename to UTF-8 for saving")) {
 			uintptr_t address = BytePattern::temp_instance().get(2).address();
 
 			fileSaveProc2CallAddress = (uintptr_t)escapedStrToUtf8;
@@ -63,7 +63,7 @@ namespace FileSave {
 
 	bool fileSaveProc3Injector() {
 		BytePattern::temp_instance().find_pattern("45 33 C0 48 8D 96 40 02 00 00 48 8B CD");
-		if (BytePattern::temp_instance().has_size(1, "ダイアログでのセーブエントリのタイトルを表示できるようにする")) {
+		if (BytePattern::temp_instance().has_size(1, "display save entry title in dialog")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			fileSaveProc3CallAddress = (uintptr_t)utf8ToEscapedStr;
@@ -81,7 +81,7 @@ namespace FileSave {
 	bool fileSaveProc5Injector() {
 		// cmp     qword ptr [rdx+18h], 10h
 		BytePattern::temp_instance().find_pattern("48 83 7A 18 10 72 03 48 8B 12 48 8D 8C 24 E0 00 00 00 E8 ? ? ? ? 90 0F");
-		if (BytePattern::temp_instance().has_size(1, "ダイアログでのセーブエントリのツールチップを表示できるようにする2")) {
+		if (BytePattern::temp_instance().has_size(1, "display save entry tooltip in dialog 2")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			fileSaveProc5CallAddress = (uintptr_t)utf8ToEscapedStr2;
@@ -96,7 +96,7 @@ namespace FileSave {
 	bool fileSaveProc6Injector() {
 		// mov     [rsp+3E0h+var_370], 0C0h
 		BytePattern::temp_instance().find_pattern("C7 44 24 70 C0 00 00 00 48 8D 95 A0 00 00 00");
-		if (BytePattern::temp_instance().has_size(1, "スタート画面でのコンティニューのツールチップ")) {
+		if (BytePattern::temp_instance().has_size(1, "continue tooltip on start screen")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address(0x8);
 
 			fileSaveProc6CallAddress = (uintptr_t)utf8ToEscapedStr2;
@@ -108,7 +108,7 @@ namespace FileSave {
 
 		// Try alternative pattern E
 		BytePattern::temp_instance().find_pattern("C7 44 24 50 C0 00 00 00 48 8D 95 A0 00 00 00");
-		if (BytePattern::temp_instance().has_size(1, "スタート画面でのコンティニューのツールチップ")) {
+		if (BytePattern::temp_instance().has_size(1, "continue tooltip on start screen")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address(0x8);
 
 			fileSaveProc6CallAddress = (uintptr_t)utf8ToEscapedStr2;
@@ -120,7 +120,7 @@ namespace FileSave {
 
 		// Try alternative pattern G
 		BytePattern::temp_instance().find_pattern("48 8D 4C 24 50 E8 1A E6 17 FF 48 8D 54 24 50 48 8D 4D 80");
-		if (BytePattern::temp_instance().has_size(1, "スタート画面でのコンティニューのツールチップ")) {
+		if (BytePattern::temp_instance().has_size(1, "continue tooltip on start screen")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address(0xa);
 
 			fileSaveProc6CallAddress = (uintptr_t)utf8ToEscapedStr2;
@@ -136,7 +136,7 @@ namespace FileSave {
 	bool fileSaveProc7Injector() {
 		// lea     rcx, [rdi+0C8h]
 		BytePattern::temp_instance().find_pattern("48 8D 8F C8 00 00 00 48 8B 01 48 8D 54 24 20 FF 90 80");
-		if (BytePattern::temp_instance().has_size(1, "セーブダイアログでのインプットテキストエリア")) {
+		if (BytePattern::temp_instance().has_size(1, "input text area in save dialog")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			fileSaveProc7CallAddress = (uintptr_t)utf8ToEscapedStr2;

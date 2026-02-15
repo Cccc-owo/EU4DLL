@@ -18,7 +18,7 @@ namespace Input {
 
 		// mov     eax, dword ptr [rbp+120h+var_18C]
 		BytePattern::temp_instance().find_pattern("8B 45 BC 32 DB 3C 80 73 05 0F B6 D8 EB 12");
-		if (BytePattern::temp_instance().has_size(1, "入力した文字をutf8からエスケープ列へ変換する１")) {
+		if (BytePattern::temp_instance().has_size(1, "convert input char from UTF-8 to escape sequence 1")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 
 			inputProc1CallAddress = (uintptr_t)utf8ToEscapedStr3;
@@ -34,7 +34,7 @@ namespace Input {
 
 		// call    qword ptr [rax+18h]
 		BytePattern::temp_instance().find_pattern("FF 50 18 E9 ? ? ? ? 49 8B 07 45 33 C9");
-		if (BytePattern::temp_instance().has_size(1, "入力した文字をutf8からエスケープ列へ変換する２")) {
+		if (BytePattern::temp_instance().has_size(1, "convert input char from UTF-8 to escape sequence 2")) {
 			uintptr_t address = BytePattern::temp_instance().get_first().address();
 			// jmp     loc_{xxxxx}
 			inputProc1ReturnAddress2 = Injector::GetBranchDestination(address + 0x3);
@@ -49,7 +49,7 @@ namespace Input {
 	bool inputProc2Injector() {
 		// xor     ecx, ecx
 		BytePattern::temp_instance().find_pattern("33 C9 48 89 4C 24 20 48 C7 44 24 38 0F 00 00 00 48 89 4C 24 30");
-		if (BytePattern::temp_instance().has_size(3, "バックスペース処理の修正")) {
+		if (BytePattern::temp_instance().has_size(3, "backspace handling fix")) {
 			uintptr_t address = BytePattern::temp_instance().get(2).address();
 
 			// movzx   r8d, word ptr [rdi+56h]
