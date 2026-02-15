@@ -1,6 +1,14 @@
 # EU4DLL
 
+[中文说明](README_zh-CN.md)
+
 This dll makes it possible to display double-byte characters on Europa Universalis IV.
+
+## Features about this fork
+
+- **Auto UTF-8 conversion**: Localization files in UTF-8 are automatically converted to the game's internal encoding at load time. No need for pre-processing tools — just drop UTF-8 `.yml` files in and they work alongside traditional pre-encoded files.
+- **Steam Rich Presence fix**: CJK text in Steam Rich Presence (e.g. country name, ruler title shown on your Steam profile) is properly displayed instead of garbled symbols.
+- **Linux support**: Works under Proton/Wine via `version.dll` override.
 
 ## Notice
 
@@ -31,7 +39,7 @@ This dll makes it possible to display double-byte characters on Europa Universal
    This tells Wine/Proton to load the native `version.dll` from the game directory instead of its builtin one.
 3. Play.
 
-> **Note:** If you remove the mod DLLs later, the game will still launch normally -- Wine falls back to its builtin `version.dll`.
+> **Note:** If you remove the mod DLLs later, the game will still launch normally — Wine falls back to its builtin `version.dll`.
 
 ## Find bugs
 
@@ -78,7 +86,19 @@ When you use this feature, please exclude Inverted Question Mark (¿) from all f
 
 ## Build
 
-Requires MinGW-w64 cross-compilation toolchain.
+Requires a MinGW-w64 toolchain (GCC with C++20 support).
+
+### Windows (native)
+
+Use MSYS2 or standalone MinGW-w64:
+
+```bash
+cmake -B build -S src -G "MinGW Makefiles"
+cmake --build build
+cmake --build build --target package
+```
+
+### Linux / macOS (cross-compilation)
 
 ```bash
 cmake -B build -S src -DCMAKE_TOOLCHAIN_FILE=src/toolchain/mingw-w64-x86_64.cmake
