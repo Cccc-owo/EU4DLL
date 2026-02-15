@@ -415,7 +415,7 @@ typedef struct _ParadoxTextObject {
 
 		if (len2 >= 0x10) {
 			auto hHeap = GetProcessHeap();
-			HeapFree(hHeap, NULL, t.p);
+			HeapFree(hHeap, 0, t.p);
 		}
 
 		len2 = src->capacity();
@@ -440,6 +440,7 @@ typedef struct _ParadoxTextObject {
 typedef struct _RunOptions {
 	bool test;
 	bool reversingWordsBattleOfArea;
+	bool autoUtf8Conversion;
 	int separateCharacterCodePoint;
 	int lineBreakBufferWidth;
 } RunOptions;
@@ -523,4 +524,8 @@ namespace Localization {
 
 namespace CBitmapFont {
 	DllError Init(RunOptions option);
+}
+
+namespace FileRead {
+	void Init(RunOptions option);
 }

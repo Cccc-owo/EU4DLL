@@ -22,6 +22,7 @@ add_library(plugin64 SHARED
     hooks/input.cpp
     hooks/localization.cpp
     hooks/c_bitmap_font.cpp
+    hooks/file_read.cpp
 
     hooks/font_asm.S
     hooks/main_text_asm.S

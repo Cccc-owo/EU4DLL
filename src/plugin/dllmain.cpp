@@ -18,6 +18,9 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		// Version check (v1.37 only)
 		if (Validator::ValidateVersion()) {
 
+			// UTF-8 auto conversion (IAT hook)
+			FileRead::Init(options);
+
 			// Font loading
 			e |= Font::Init(options);
 

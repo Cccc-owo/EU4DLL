@@ -71,6 +71,20 @@ namespace Ini {
 		options->reversingWordsBattleOfArea = lstrcmpW(buf, L"yes") == 0;
 	}
 
+	void autoUtf8Conversion(const std::wstring& ini_path, RunOptions* options) {
+		wchar_t buf[64] = { 0 };
+
+		GetPrivateProfileStringW(
+			L"options",
+			L"AUTO_UTF8_CONVERSION",
+			L"yes",
+			buf,
+			64,
+			ini_path.c_str()
+		);
+		options->autoUtf8Conversion = lstrcmpW(buf, L"yes") == 0;
+	}
+
 	void GetOptionsFromIni(RunOptions* options) {
 		std::wstring ini_path = constructIniPath();
 
@@ -78,5 +92,6 @@ namespace Ini {
 		separateCharacter(ini_path, options);
 		reversingWordsBattleOfArea(ini_path, options);
 		lineBreakBufferWidth(ini_path, options);
+		autoUtf8Conversion(ini_path, options);
 	}
 }
