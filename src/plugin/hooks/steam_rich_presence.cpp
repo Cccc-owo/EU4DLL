@@ -1,21 +1,18 @@
-#include "../iat_hook.h"
 #include "../escape_tool.h"
 #include <string>
 
 namespace SteamRichPresence {
 
-// Flat API function pointer type
-typedef bool (__cdecl *SetRichPresenceFn)(void* self, const char* pchKey, const char* pchValue);
+// Function pointer type matching ISteamFriends::SetRichPresence on x64
+// x64 Windows has only one calling convention: this in rcx, args in rdx/r8/r9
+typedef bool (*SetRichPresenceFn)(void* self, const char* pchKey, const char* pchValue);
+typedef void* (*SteamFriendsGetterFn)();
 
-// Original function pointers
+// Original function pointer saved from vtable
 static SetRichPresenceFn origSetRichPresence = nullptr;
 
-// For SteamAPI_Init fallback
-typedef bool (__cdecl *SteamAPI_InitFn)();
-typedef void* (__cdecl *SteamFriendsGetterFn)();
-static SteamAPI_InitFn origSteamAPIInit = nullptr;
-static void** vtableHookLocation = nullptr;
-static SetRichPresenceFn origVtableSetRichPresence = nullptr;
+// SetRichPresence vtable index in ISteamFriends (v015/v016/v017 all use index 43)
+constexpr int kSetRichPresenceIndex = 43;
 
 // Check if text contains escape markers (0x10-0x13)
 static bool hasEscapedChars(const char* text) {
@@ -33,8 +30,8 @@ static std::string convertEscapedToUtf8(const char* text) {
     return convertWideTextToUtf8(wide);
 }
 
-// Hook for flat API: SteamAPI_ISteamFriends_SetRichPresence
-static bool __cdecl hookedSetRichPresence(void* self, const char* pchKey, const char* pchValue) {
+// Hook function: convert escaped text to UTF-8 before calling original
+static bool hookedSetRichPresence(void* self, const char* pchKey, const char* pchValue) {
     if (pchValue && hasEscapedChars(pchValue)) {
         std::string utf8Value = convertEscapedToUtf8(pchValue);
         return origSetRichPresence(self, pchKey, utf8Value.c_str());
@@ -42,73 +39,72 @@ static bool __cdecl hookedSetRichPresence(void* self, const char* pchKey, const 
     return origSetRichPresence(self, pchKey, pchValue);
 }
 
-// Vtable hook version of SetRichPresence (thiscall via ecx on x86, rcx on x64)
-// On x64 Windows, thiscall == normal calling convention (first arg = this in rcx)
-static bool vtableHookedSetRichPresence(void* self, const char* pchKey, const char* pchValue) {
-    if (pchValue && hasEscapedChars(pchValue)) {
-        std::string utf8Value = convertEscapedToUtf8(pchValue);
-        return origVtableSetRichPresence(self, pchKey, utf8Value.c_str());
-    }
-    return origVtableSetRichPresence(self, pchKey, pchValue);
-}
-
 // Hook the vtable of ISteamFriends to intercept SetRichPresence
-static void hookVtable(void* steamFriends) {
-    if (!steamFriends) return;
+static bool hookVtable(void* steamFriends) {
+    if (!steamFriends) return false;
 
-    // ISteamFriends vtable: SetRichPresence is at index 43 in ISteamFriends017
     void** vtable = *reinterpret_cast<void***>(steamFriends);
-    constexpr int kSetRichPresenceIndex = 43;
+    if (!vtable) return false;
 
-    origVtableSetRichPresence = reinterpret_cast<SetRichPresenceFn>(vtable[kSetRichPresenceIndex]);
-    vtableHookLocation = &vtable[kSetRichPresenceIndex];
+    origSetRichPresence = reinterpret_cast<SetRichPresenceFn>(vtable[kSetRichPresenceIndex]);
+    if (!origSetRichPresence) return false;
 
     DWORD oldProtect;
-    VirtualProtect(vtableHookLocation, sizeof(void*), PAGE_READWRITE, &oldProtect);
-    *vtableHookLocation = reinterpret_cast<void*>(vtableHookedSetRichPresence);
-    VirtualProtect(vtableHookLocation, sizeof(void*), oldProtect, &oldProtect);
-}
+    if (!VirtualProtect(&vtable[kSetRichPresenceIndex], sizeof(void*), PAGE_READWRITE, &oldProtect))
+        return false;
 
-// Hooked SteamAPI_Init: call original, then hook vtable
-static bool __cdecl hookedSteamAPIInit() {
-    bool result = origSteamAPIInit();
-    if (!result) return false;
-
-    // Get ISteamFriends* via SteamAPI_SteamFriends_v017
-    HMODULE steamApi = GetModuleHandleA("steam_api64.dll");
-    if (!steamApi)
-        steamApi = GetModuleHandleA("steam_api.dll");
-    if (!steamApi) return true;
-
-    auto getSteamFriends = reinterpret_cast<SteamFriendsGetterFn>(
-        GetProcAddress(steamApi, "SteamAPI_SteamFriends_v017"));
-    if (!getSteamFriends) return true;
-
-    void* steamFriends = getSteamFriends();
-    if (steamFriends) {
-        hookVtable(steamFriends);
-    }
+    vtable[kSetRichPresenceIndex] = reinterpret_cast<void*>(hookedSetRichPresence);
+    VirtualProtect(&vtable[kSetRichPresenceIndex], sizeof(void*), oldProtect, &oldProtect);
 
     return true;
 }
 
+// Background thread: wait for Steam API to initialize, then hook vtable
+static DWORD WINAPI DelayedInit(LPVOID) {
+    // Wait for steam_api64.dll to be loaded (up to 60 seconds)
+    HMODULE steamApi = nullptr;
+    for (int i = 0; i < 600 && !steamApi; i++) {
+        Sleep(100);
+        steamApi = GetModuleHandleA("steam_api64.dll");
+    }
+    if (!steamApi)
+        return 0;
+
+    // Find ISteamFriends accessor (try multiple SDK versions)
+    const char* versions[] = {
+        "SteamAPI_SteamFriends_v017",
+        "SteamAPI_SteamFriends_v016",
+        "SteamAPI_SteamFriends_v015",
+    };
+
+    SteamFriendsGetterFn getter = nullptr;
+    for (auto ver : versions) {
+        getter = reinterpret_cast<SteamFriendsGetterFn>(GetProcAddress(steamApi, ver));
+        if (getter) break;
+    }
+    if (!getter)
+        return 0;
+
+    // Wait for SteamFriends interface to be available (up to 60 seconds)
+    // It becomes non-null after SteamAPI_Init completes
+    void* steamFriends = nullptr;
+    for (int i = 0; i < 600 && !steamFriends; i++) {
+        Sleep(100);
+        steamFriends = getter();
+    }
+    if (!steamFriends)
+        return 0;
+
+    hookVtable(steamFriends);
+    return 0;
+}
+
 void Init() {
-    HMODULE exeModule = GetModuleHandle(nullptr);
-
-    // Primary: try to IAT hook the flat API function
-    origSetRichPresence = reinterpret_cast<SetRichPresenceFn>(
-        IATHook::Hook(exeModule, "steam_api64.dll",
-                      "SteamAPI_ISteamFriends_SetRichPresence",
-                      reinterpret_cast<void*>(hookedSetRichPresence)));
-
-    if (origSetRichPresence)
-        return; // IAT hook succeeded
-
-    // Fallback: hook SteamAPI_Init to later do vtable hook
-    origSteamAPIInit = reinterpret_cast<SteamAPI_InitFn>(
-        IATHook::Hook(exeModule, "steam_api64.dll",
-                      "SteamAPI_Init",
-                      reinterpret_cast<void*>(hookedSteamAPIInit)));
+    // Launch background thread for delayed initialization
+    // Cannot hook immediately because steam_api64.dll may not be loaded yet
+    HANDLE hThread = CreateThread(nullptr, 0, DelayedInit, nullptr, 0, nullptr);
+    if (hThread)
+        CloseHandle(hThread);
 }
 
 } // namespace SteamRichPresence
