@@ -69,7 +69,7 @@ namespace EventDialog {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("EventDialog");
 
 		result.add("eventDialog1Injector", eventDialog1Injector());

@@ -5,9 +5,6 @@
 #include <windows.h>
 #include <filesystem>
 
-using namespace std;
-using namespace std::filesystem;
-
 extern "C" {
     struct
     {
@@ -75,22 +72,22 @@ void initInjector()
     // Load the real version.dll from System32
     wchar_t sysDir[MAX_PATH];
     GetSystemDirectoryW(sysDir, MAX_PATH);
-    path versionPath = path{sysDir} / L"version.dll";
+    std::filesystem::path versionPath = std::filesystem::path{sysDir} / L"version.dll";
 
     version.LoadOriginalLibrary(LoadLibraryW(versionPath.c_str()));
 }
 
-void LoadScripts(const path& folder)
+void LoadScripts(const std::filesystem::path& folder)
 {
-    if (!exists(folder)) return;
+    if (!std::filesystem::exists(folder)) return;
 
-    directory_iterator dirit{folder};
+    std::filesystem::directory_iterator dirit{folder};
 
-    while (dirit != directory_iterator{})
+    while (dirit != std::filesystem::directory_iterator{})
     {
         auto _path = dirit->path();
 
-        if (is_regular_file(_path) && _path.extension() == L".dll")
+        if (std::filesystem::is_regular_file(_path) && _path.extension() == L".dll")
         {
             LoadLibraryW(_path.c_str());
         }
@@ -103,7 +100,7 @@ bool validateProcess() {
     wchar_t pluginpath[MAX_PATH];
     GetModuleFileNameW(NULL, pluginpath, MAX_PATH);
 
-    path exePath{pluginpath};
+    std::filesystem::path exePath{pluginpath};
     auto stem = exePath.stem().wstring();
     auto ext = exePath.extension().wstring();
 
@@ -119,7 +116,7 @@ void Initialize(HMODULE hSelf)
     wchar_t pluginpath[MAX_PATH];
     GetModuleFileNameW(hSelf, pluginpath, MAX_PATH);
 
-    const path pluginsPath = path{pluginpath}.parent_path() / L"plugins";
+    const std::filesystem::path pluginsPath = std::filesystem::path{pluginpath}.parent_path() / L"plugins";
 
     initInjector();
     LoadScripts(pluginsPath);

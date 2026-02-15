@@ -26,7 +26,7 @@ namespace Localization {
 	// Battle of area reversal
 	void* localizationProc2Call(ParadoxTextObject* p, const char* src, const size_t size) {
 		auto text = std::string(src).substr(1) + p->getString();
-		p->setString(&text);
+		p->setString(text);
 		return p;
 	}
 
@@ -37,11 +37,11 @@ namespace Localization {
 
 		if (second.length() >= 3 && second.at(1) == (char)0xBF) {
 			auto text = second.substr(2) + first;
-			p1->setString(&text);
+			p1->setString(text);
 		}
 		else {
 			auto text = first + second;
-			p1->setString(&text);
+			p1->setString(text);
 		}
 
 		return p1;
@@ -53,7 +53,7 @@ namespace Localization {
 
 		p1->len = 0;
 		p1->len2 = 0;
-		p1->setString(&text);
+		p1->setString(text);
 
 		return p1;
 	}
@@ -64,7 +64,7 @@ namespace Localization {
 
 		p1->len = 0;
 		p1->len2 = 0;
-		p1->setString(&text);
+		p1->setString(text);
 
 		return p1;
 	}
@@ -168,7 +168,7 @@ namespace Localization {
 	ParadoxTextObject _month;
 	ParadoxTextObject _day;
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("Localization");
 
 		_day.t.text[0] = 0xE;

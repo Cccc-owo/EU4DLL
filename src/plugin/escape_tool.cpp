@@ -1,5 +1,5 @@
 #include "escape_tool.h"
-#include <cstdlib>
+#include <memory>
 
 inline wchar_t UCS2ToCP1252(int cp) {
 	wchar_t result = cp;
@@ -240,8 +240,8 @@ static thread_local std::unique_ptr<ParadoxTextObject> tmpParadoxTextObject;
 char* utf8ToEscapedStr(char* from) {
 
 	if (tmpParadoxTextObject) {
-		if (tmpParadoxTextObject->len > 0x10) {
-			free(tmpParadoxTextObject->t.p);
+		if (tmpParadoxTextObject->len >= 0x10) {
+			HeapFree(GetProcessHeap(), 0, tmpParadoxTextObject->t.p);
 		}
 	}
 
@@ -264,7 +264,8 @@ char* utf8ToEscapedStr(char* from) {
 	tmpParadoxTextObject->len2 = len;
 
 	if (len >= 0x10) {
-		char* buf = static_cast<char*>(calloc(len + 1, sizeof(char)));
+		auto hHeap = GetProcessHeap();
+		char* buf = static_cast<char*>(HeapAlloc(hHeap, HEAP_ZERO_MEMORY, len + 1));
 		if (buf) {
 			memcpy(buf, escaped.c_str(), len + 1);
 			tmpParadoxTextObject->t.p = buf;
@@ -282,15 +283,15 @@ void utf8ToEscapedStrP(ParadoxTextObject* src) {
 	std::wstring wide = convertTextToWideText(src->getString().c_str());
 	std::string escaped = convertWideTextToEscapedText(wide.c_str());
 
-	src->setString(&escaped);
+	src->setString(escaped);
 }
 
 static thread_local std::unique_ptr<ParadoxTextObject> tmpZV2;
 ParadoxTextObject* utf8ToEscapedStr2(ParadoxTextObject* from) {
 
 	if (tmpZV2) {
-		if (tmpZV2->len > 0x10) {
-			free(tmpZV2->t.p);
+		if (tmpZV2->len >= 0x10) {
+			HeapFree(GetProcessHeap(), 0, tmpZV2->t.p);
 		}
 	}
 	tmpZV2 = std::make_unique<ParadoxTextObject>();
@@ -311,7 +312,8 @@ ParadoxTextObject* utf8ToEscapedStr2(ParadoxTextObject* from) {
 	tmpZV2->len = len;
 
 	if (len >= 0x10) {
-		char* buf = static_cast<char*>(calloc(len + 1, sizeof(char)));
+		auto hHeap = GetProcessHeap();
+		char* buf = static_cast<char*>(HeapAlloc(hHeap, HEAP_ZERO_MEMORY, len + 1));
 		if (buf) {
 			memcpy(buf, escaped.c_str(), len + 1);
 			tmpZV2->t.p = buf;
@@ -331,7 +333,7 @@ char* escapedStrToUtf8(ParadoxTextObject* from) {
 	std::wstring wide = convertEscapedTextToWideText(src);
 	std::string utf8 = convertWideTextToUtf8(wide);
 
-	from->setString(&utf8);
+	from->setString(utf8);
 
 	return reinterpret_cast<char*>(from);
 }

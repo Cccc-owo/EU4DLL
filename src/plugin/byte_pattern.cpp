@@ -1,11 +1,12 @@
 //Core code from Hooking.Patterns
 //https://github.com/ThirteenAG/Hooking.Patterns
 
-#include "plugin64.h"
 #include "byte_pattern.h"
 
-using namespace std;
-using namespace std::filesystem;
+#include <windows.h>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
 
 // Simple split function replacing boost::algorithm::split + boost::is_any_of
 static std::vector<std::string> split_string(const std::string& str, char delimiter)
@@ -53,7 +54,7 @@ void BytePattern::StartLog(const wchar_t* module_name)
 	DWORD len = GetModuleFileName(NULL, exe_path.data(), static_cast<DWORD>(exe_path.size()));
 	exe_path.resize(len);
 
-	log_stream().open(path { exe_path }.parent_path() / filename, ios::trunc);
+	log_stream().open(std::filesystem::path { exe_path }.parent_path() / filename, std::ios::trunc);
 }
 
 void BytePattern::ShutdownLog()
@@ -73,7 +74,7 @@ BytePattern::BytePattern()
 	set_module();
 }
 
-BytePattern& BytePattern::set_pattern(string_view pattern_literal)
+BytePattern& BytePattern::set_pattern(std::string_view pattern_literal)
 {
 	this->transform_pattern(pattern_literal);
 	this->bm_preprocess();
@@ -97,7 +98,7 @@ BytePattern& BytePattern::set_module(memory_pointer module)
 
 BytePattern& BytePattern::set_range(memory_pointer beg, memory_pointer end)
 {
-	this->_ranges.resize(1, make_pair(beg.address(), end.address()));
+	this->_ranges.resize(1, std::make_pair(beg.address(), end.address()));
 
 	return *this;
 }
@@ -111,7 +112,7 @@ BytePattern& BytePattern::search()
 	return *this;
 }
 
-BytePattern& BytePattern::find_pattern(string_view pattern_literal)
+BytePattern& BytePattern::find_pattern(std::string_view pattern_literal)
 {
 	this->set_pattern(pattern_literal).search();
 
@@ -120,20 +121,20 @@ BytePattern& BytePattern::find_pattern(string_view pattern_literal)
 
 std::ofstream& BytePattern::log_stream()
 {
-	static ofstream instance;
+	static std::ofstream instance;
 
 	return instance;
 }
 
-pair<uint8_t, uint8_t> BytePattern::parse_sub_pattern(string_view sub)
+std::pair<uint8_t, uint8_t> BytePattern::parse_sub_pattern(std::string_view sub)
 {
 	auto digit_to_value = [](char character) {
 		if ('0' <= character && character <= '9') return (character - '0');
 		else if ('A' <= character && character <= 'F') return (character - 'A' + 10);
 		else if ('a' <= character && character <= 'f') return (character - 'a' + 10);
-		throw invalid_argument("Could not parse pattern."); };
+		throw std::invalid_argument("Could not parse pattern."); };
 
-	pair<uint8_t, uint8_t> result;
+	std::pair<uint8_t, uint8_t> result;
 
 	if (sub.size() == 1)
 	{
@@ -173,13 +174,13 @@ pair<uint8_t, uint8_t> BytePattern::parse_sub_pattern(string_view sub)
 	}
 	else
 	{
-		throw invalid_argument("Could not parse pattern.");
+		throw std::invalid_argument("Could not parse pattern.");
 	}
 
 	return result;
 }
 
-void BytePattern::transform_pattern(string_view literal)
+void BytePattern::transform_pattern(std::string_view literal)
 {
 	this->clear();
 	this->_literal.assign(literal.begin(), literal.end());
@@ -201,7 +202,7 @@ void BytePattern::transform_pattern(string_view literal)
 			this->_mask.push_back(pat.second);
 		}
 	}
-	catch (const invalid_argument&)
+	catch (const std::invalid_argument&)
 	{
 		this->clear();
 	}
@@ -218,7 +219,7 @@ void BytePattern::get_module_ranges(memory_pointer module)
 	};
 
 	_ranges.clear();
-	pair<uintptr_t, uintptr_t> range;
+	std::pair<uintptr_t, uintptr_t> range;
 
 	PIMAGE_DOS_HEADER dosHeader = module.pointer<IMAGE_DOS_HEADER>();
 	PIMAGE_NT_HEADERS ntHeader = module.pointer<IMAGE_NT_HEADERS>(dosHeader->e_lfanew);
@@ -261,7 +262,7 @@ size_t BytePattern::count() const
 	return this->_results.size();
 }
 
-bool BytePattern::has_size(size_t expected, string desc) const
+bool BytePattern::has_size(size_t expected, const std::string& desc) const
 {
 	const bool result = (this->_results.size() == expected);
 
@@ -336,7 +337,7 @@ void BytePattern::bm_search()
 			}
 			else
 			{
-				range_begin += max(index - this->_bmbc[range_begin[index]], (ptrdiff_t)1);
+				range_begin += std::max(index - this->_bmbc[range_begin[index]], (ptrdiff_t)1);
 			}
 		}
 	}
@@ -347,7 +348,7 @@ void BytePattern::debug_output() const
 	if (!log_stream().is_open())
 		return;
 
-	log_stream() << hex << uppercase;
+	log_stream() << std::hex << std::uppercase;
 
 	log_stream() << "Result(s) of pattern: " << _literal << '\n';
 
@@ -364,15 +365,15 @@ void BytePattern::debug_output() const
 		log_stream() << "None\n";
 	}
 
-	log_stream() << "--------------------------------------------------------------------------------------" << endl;
+	log_stream() << "--------------------------------------------------------------------------------------" << std::endl;
 }
 
-void BytePattern::LoggingInfo(const std::string message)
+void BytePattern::LoggingInfo(const std::string& message)
 {
 	if (!log_stream().is_open())
 		return;
 
 	log_stream() << message << "\n";
 
-	log_stream() << "--------------------------------------------------------------------------------------" << '\n' << endl;
+	log_stream() << "--------------------------------------------------------------------------------------" << '\n' << std::endl;
 }

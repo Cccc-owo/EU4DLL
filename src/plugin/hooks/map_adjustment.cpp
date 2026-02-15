@@ -97,7 +97,7 @@ namespace MapAdjustment {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("MapAdjustment");
 
 		result.add("mapAdjustmentProc1Injector", mapAdjustmentProc1Injector());

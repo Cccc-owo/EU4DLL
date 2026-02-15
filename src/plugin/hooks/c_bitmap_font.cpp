@@ -38,7 +38,7 @@ namespace CBitmapFont {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("CBitmapFont");
 
 		result.add("cBitmapFontProc1Injector", cBitmapFontProc1Injector());

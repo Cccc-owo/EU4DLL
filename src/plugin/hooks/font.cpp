@@ -74,7 +74,7 @@ namespace Font {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("Font");
 
 		result.add("charCodePointLimiterPatchInjector", charCodePointLimiterPatchInjector());

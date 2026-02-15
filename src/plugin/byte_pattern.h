@@ -75,7 +75,7 @@ class BytePattern
 
 
 public:
-	static void LoggingInfo(const std::string message);
+	static void LoggingInfo(const std::string& message);
 	static void StartLog(const wchar_t* module_name);
 	static void ShutdownLog();
 
@@ -97,7 +97,7 @@ public:
 	memory_pointer get_second() const;
 
 	std::size_t count() const;
-	bool has_size(std::size_t expected, std::string version) const;
+	bool has_size(std::size_t expected, const std::string& version) const;
 	bool empty() const;
 	void clear();
 

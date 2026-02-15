@@ -3,7 +3,7 @@
 
 namespace Validator {
 
-	bool Validate(DllError e, RunOptions options) {
+	bool Validate(const DllError& e, const RunOptions& options) {
 		auto message = e.print();
 
 		BytePattern::LoggingInfo(message);
@@ -34,22 +34,15 @@ namespace Validator {
 		if (!detected) {
 			const WCHAR* caption = L"UNSUPPORTED VERSION";
 			const WCHAR* msg = L"Multibyte DLL hasn't supported this game version yet.\n"
-				  L"Do you want to start the game anyway?";
+				  L"The game will start without the multibyte patch.";
 
-			int result = MessageBoxW(NULL, msg, caption, MB_YESNO);
+			MessageBoxW(NULL, msg, caption, MB_OK);
 
-			if (result == IDYES) {
-				BytePattern::LoggingInfo("DLL [SKIP]");
-				return false;
-			}
-			else {
-				BytePattern::LoggingInfo("DLL [VERSION MISMATCH]");
-				return false;
-			}
+			BytePattern::LoggingInfo("DLL [VERSION MISMATCH]");
+			return false;
 		}
-		else {
-			BytePattern::LoggingInfo("DLL [MATCH VERSION]");
-			return true;
-		}
+
+		BytePattern::LoggingInfo("DLL [MATCH VERSION]");
+		return true;
 	}
 }

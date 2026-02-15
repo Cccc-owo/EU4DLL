@@ -136,7 +136,7 @@ namespace TooltipAndButton {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("TooltipAndButton");
 
 		result.add("tooltipAndButtonProc1Injector", tooltipAndButtonProc1Injector());

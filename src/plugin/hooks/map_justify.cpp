@@ -55,7 +55,7 @@ namespace MapJustify {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("MapJustify");
 
 		result.add("mapJustifyProc1Injector", mapJustifyProc1Injector());

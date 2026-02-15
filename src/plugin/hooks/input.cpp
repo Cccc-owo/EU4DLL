@@ -61,7 +61,7 @@ namespace Input {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("Input");
 
 		result.add("inputProc1Injector", inputProc1Injector());

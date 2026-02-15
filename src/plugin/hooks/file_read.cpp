@@ -259,7 +259,7 @@ static BOOL WINAPI hookedCloseHandle(HANDLE hObject)
     return origCloseHandle(hObject);
 }
 
-void Init(RunOptions options)
+void Init(const RunOptions& options)
 {
     if (!options.autoUtf8Conversion)
         return;

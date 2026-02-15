@@ -124,7 +124,7 @@ namespace Ime {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("Ime");
 
 		result.add("imeProc1Injector", imeProc1Injector());

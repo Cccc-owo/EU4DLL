@@ -62,7 +62,7 @@ namespace MapPopup {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("MapPopup");
 
 		result.add("mapPopupProc1Injector", mapPopupProc1Injector());

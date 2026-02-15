@@ -75,7 +75,7 @@ namespace MapView {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("MapView");
 
 		result.add("mapViewProc1Injector", mapViewProc1Injector());

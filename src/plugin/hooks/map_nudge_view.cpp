@@ -22,7 +22,7 @@ namespace MapNudgeView {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("MapNudgeView");
 
 		result.add("mapNudgeViewProc1Injector", mapNudgeViewProc1Injector());

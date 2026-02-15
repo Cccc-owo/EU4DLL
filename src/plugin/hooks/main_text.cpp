@@ -89,7 +89,7 @@ namespace MainText {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("MainText");
 
 		result.add("mainTextProc1Injector", mainTextProc1Injector());

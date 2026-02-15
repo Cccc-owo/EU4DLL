@@ -62,7 +62,7 @@ namespace ListFieldAdjustment {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("ListFieldAdjustment");
 
 		result.add("listFieldAdjustmentProc1Injector", listFieldAdjustmentProc1Injector());

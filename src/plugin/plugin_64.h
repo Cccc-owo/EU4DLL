@@ -57,8 +57,8 @@ struct DllError {
 	}
 };
 
-// same std::basic_string<char>
-typedef struct _ParadoxTextObject {
+// same layout as std::basic_string<char>
+struct ParadoxTextObject {
 	union {
 		char text[0x10];
 		char* p;
@@ -75,38 +75,37 @@ typedef struct _ParadoxTextObject {
 		}
 	}
 
-	void setString(std::string *src) {
+	void setString(const std::string& src) {
 
 		if (len2 >= 0x10) {
 			auto hHeap = GetProcessHeap();
 			HeapFree(hHeap, 0, t.p);
 		}
 
-		len2 = src->capacity();
-		len = src->length();
+		len = src.length();
 
 		if (len >= 0x10) {
 			len2 = 0xFF;
 			auto hHeap = GetProcessHeap();
 			auto p = static_cast<char*>(HeapAlloc(hHeap, HEAP_ZERO_MEMORY, 0xFF));
 			if (p == nullptr) return;
-			memcpy(p, src->c_str(), len + 1);
+			memcpy(p, src.c_str(), len + 1);
 			t.p = p;
 		}
 		else {
-			memcpy(t.text, src->c_str(), len + 1);
+			len2 = 0xF;
+			memcpy(t.text, src.c_str(), len + 1);
 		}
 	}
+};
 
-} ParadoxTextObject;
-
-typedef struct _RunOptions {
+struct RunOptions {
 	bool test;
 	bool reversingWordsBattleOfArea;
 	bool autoUtf8Conversion;
 	int separateCharacterCodePoint;
 	int lineBreakBufferWidth;
-} RunOptions;
+};
 
 namespace Version {
 	bool DetectVersion();
@@ -117,76 +116,76 @@ namespace Ini {
 }
 
 namespace Font {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace MainText {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace TooltipAndButton {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace MapView {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace MapAdjustment {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace MapJustify {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace EventDialog {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace MapPopup {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace ListFieldAdjustment {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace Validator {
-	bool Validate(DllError dllError, RunOptions options);
+	bool Validate(const DllError& dllError, const RunOptions& options);
 	bool ValidateVersion();
 }
 
 namespace FileSave {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace Date {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace MapNudgeView {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace Ime {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace Input {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace Localization {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace CBitmapFont {
-	HookResult Init(RunOptions option);
+	HookResult Init(const RunOptions& options);
 }
 
 namespace FileRead {
-	void Init(RunOptions option);
+	void Init(const RunOptions& options);
 }
 
 namespace SteamRichPresence {

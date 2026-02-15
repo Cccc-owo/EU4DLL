@@ -194,7 +194,7 @@ namespace FileSave {
 		return true;
 	}
 
-	HookResult Init(RunOptions options) {
+	HookResult Init(const RunOptions& options) {
 		HookResult result("FileSave");
 
 		result.add("fileSaveProc1Injector", fileSaveProc1Injector());
