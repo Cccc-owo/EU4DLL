@@ -51,7 +51,7 @@ If you find a bug, **create an issue** in this repository.
 
 #### SEPARATE_CHARACTER_CODE_POINT
 
-Change the character that connects the region name and the country name. See ISSUE-164.
+Change the character that connects the region name and the country name. See [ISSUE-164](https://github.com/matanki-saito/EU4dll/issues/164).
 
 #### REVERSING_WORDS_BATTLE_OF_AREA
 

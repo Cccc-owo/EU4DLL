@@ -49,7 +49,7 @@
 
 #### SEPARATE_CHARACTER_CODE_POINT
 
-修改连接地区名称和国家名称的分隔字符。参见 ISSUE-164。
+修改连接地区名称和国家名称的分隔字符。参见 [ISSUE-164](https://github.com/matanki-saito/EU4dll/issues/164)。
 
 #### REVERSING_WORDS_BATTLE_OF_AREA
 
