@@ -5,57 +5,57 @@ This dll makes it possible to display double-byte characters on Europa Universal
 ## Notice
 
 - This project is **unofficial**.
-- Windows is supported and dll only works on Steam.
-- macOS is not supported. I don't have those plans.
-- Linux is not supported.
+- Supports EU4 v1.37.x only.
+- Windows and Linux (via Proton/Wine) are supported. Steam only.
+- macOS is not supported.
 
 ## How to use
 
-- Manual install
-  1. Download latest release zipped file and unpack it.
-  2. Put all files into the game directory.
-  3. Subscribe multibyte mods from steam or add mods to paradox user directory in your documents folder.
-  4. Enable mods on game luncher
-  5. Play game. 👍
+### Windows
 
-- Automatic install
+1. Download the latest release zip and extract it.
+2. Copy `version.dll` and the `plugins/` folder into the EU4 game directory.
+3. Subscribe to multibyte mods from Steam Workshop, or add mods to the Paradox user directory.
+4. Enable mods in the game launcher.
+5. Play.
 
-  1. Download [Simple Installer](https://github.com/matanki-saito/SimpleInstaller)
-  2. See [Install Guide (Japanese)](https://paradoxian-japan-mod.com/page-1295/)
-  3. Enable mods on game luncher
-  4. Play game. 👍
+### Linux (Steam Play / Proton)
+
+1. Follow the same steps as Windows to place the files.
+2. In Steam, right-click EU4 > Properties > Launch Options, and add:
+
+   ```bash
+   WINEDLLOVERRIDES="version=n,b" %command%
+   ```
+
+   This tells Wine/Proton to load the native `version.dll` from the game directory instead of its builtin one.
+3. Play.
+
+> **Note:** If you remove the mod DLLs later, the game will still launch normally -- Wine falls back to its builtin `version.dll`.
 
 ## Find bugs
 
-If you find a bug, **create a issue** in this repository.
+If you find a bug, **create an issue** in this repository.
 
 ## Spec
 
 ### plugins/plugin.ini
 
-#### ERROR_TEST
-
-It is for the alert debug.
-
 #### SEPARATE_CHARACTER_CODE_POINT
 
-Change the character that connects the region name and the country name. See ISSUE-164
+Change the character that connects the region name and the country name. See ISSUE-164.
 
 #### REVERSING_WORDS_BATTLE_OF_AREA
 
-Change the words ordering.
+Change the word ordering:
 
 - Battle of / xxx -> xxx / Battle of
 - Siege of / xxx -> xxx / Siege of
 - Occupation of xxx -> xxx / Occupation of
 
-### Autoupdate
-
-Plugin.dll and Plugin64.dll will be updated automatically. It requires an Internet connection at game run. If you do not need or play offline game, please DELETE "plugins/autoupdate.bat" file.
-
 ### Name order
 
-Attaching Inverted Question Mark(¿) to dynasty, the first name and last name are reversed.
+Attaching Inverted Question Mark (¿) to dynasty, the first name and last name are reversed.
 
 ```paradox
 1534.6.23 = {
@@ -74,7 +74,19 @@ Attaching Inverted Question Mark(¿) to dynasty, the first name and last name ar
 # Nobunaga Oda -> Oda Nobunaga
 ```
 
-When you use this feature, please exclude Inverted Question Mark(¿) from all fonts.
+When you use this feature, please exclude Inverted Question Mark (¿) from all fonts.
+
+## Build
+
+Requires MinGW-w64 cross-compilation toolchain.
+
+```bash
+cmake -B build -S src -DCMAKE_TOOLCHAIN_FILE=src/toolchain/mingw-w64-x86_64.cmake
+cmake --build build
+cmake --build build --target package
+```
+
+Output is in `build/package/`.
 
 ## Licence
 
@@ -82,6 +94,8 @@ MIT Licence
 
 ## Thanks
 
-This dll was forked by the following project. Thank you so much.
+This dll was forked from the following project. Thank you so much.
 
 [EU4CHS](https://bitbucket.org/kelashi/eu4chs/src/master/)
+
+[EU4JPS](https://github.com/matanki-saito/EU4dll/tree/develop)
