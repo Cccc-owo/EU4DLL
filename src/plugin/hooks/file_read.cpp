@@ -40,7 +40,7 @@ static bool isTextFile(const wchar_t* path)
         lower[i] = (ext[i] >= L'A' && ext[i] <= L'Z') ? ext[i] + 32 : ext[i];
 
     std::wstring_view lext(lower, ext.size());
-    return lext == L".yml" || lext == L".txt" || lext == L".csv" || lext == L".lua";
+    return lext == L".yml" || lext == L".txt";
 }
 
 static bool needsUtf8Conversion(const char* buf, size_t len)
@@ -127,7 +127,7 @@ static std::vector<char> readEntireFile(HANDLE hFile)
     LARGE_INTEGER zero = {};
     SetFilePointerEx(hFile, zero, nullptr, FILE_BEGIN);
 
-    DWORD totalRead = 0;
+    size_t totalRead = 0;
     while (totalRead < totalSize) {
         DWORD toRead = (DWORD)std::min(totalSize - totalRead, (size_t)0x7FFFFFFF);
         DWORD bytesRead = 0;
@@ -182,10 +182,8 @@ static BOOL WINAPI hookedReadFile(
         return origReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped);
     }
 
-    HandleState& state = it->second;
-
     // First read on this handle: load and convert the file
-    if (state.pendingData.empty() && state.readOffset == 0) {
+    if (it->second.pendingData.empty() && it->second.readOffset == 0) {
         // Release lock during file I/O and conversion
         LeaveCriticalSection(&handleLock);
 
@@ -231,10 +229,10 @@ static BOOL WINAPI hookedReadFile(
         }
         it->second.pendingData = std::move(converted);
         it->second.readOffset = 0;
-        state = it->second;
     }
 
     // Serve data from shadow buffer
+    HandleState& state = it->second;
     size_t remaining = state.pendingData.size() - state.readOffset;
     DWORD toCopy = (DWORD)std::min((size_t)nNumberOfBytesToRead, remaining);
 
