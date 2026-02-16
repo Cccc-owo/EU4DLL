@@ -61,9 +61,36 @@ namespace SteamRichPresence {
             }
         }
 
+        // Thread ID used by VEH to only catch exceptions from our init thread
+        static volatile DWORD initThreadId = 0;
+
+        // Install a VEH that catches fatal crashes in our init thread and silently
+        // terminates it, so a failure here never brings down the game.
+        auto veh = AddVectoredExceptionHandler(1, [](PEXCEPTION_POINTERS ep) -> LONG {
+            if (GetCurrentThreadId() != initThreadId)
+                return EXCEPTION_CONTINUE_SEARCH;
+
+            DWORD code = ep->ExceptionRecord->ExceptionCode;
+
+            // Only intercept fatal exceptions (access violation, illegal instruction, etc.)
+            // Let non-fatal ones through (OutputDebugString, breakpoints, C++ exceptions).
+            if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION &&
+                code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_INT_DIVIDE_BY_ZERO &&
+                code != EXCEPTION_PRIV_INSTRUCTION && code != EXCEPTION_IN_PAGE_ERROR)
+                return EXCEPTION_CONTINUE_SEARCH;
+
+            logMsg("Exception 0x%08lX at %p, aborting hook\n", code,
+                   ep->ExceptionRecord->ExceptionAddress);
+            logClose();
+            ExitThread(1);
+            return EXCEPTION_CONTINUE_SEARCH; // unreachable
+        });
+
         HANDLE hThread = CreateThread(
             nullptr, 0,
-            [](LPVOID) -> DWORD {
+            [](LPVOID vehHandle) -> DWORD {
+                initThreadId = GetCurrentThreadId();
+
                 logOpen();
                 logMsg("=== Steam Rich Presence hook init ===\n");
 
@@ -76,31 +103,43 @@ namespace SteamRichPresence {
                 if (!api) {
                     logMsg("steam_api64.dll not found\n");
                     logClose();
+                    RemoveVectoredExceptionHandler(vehHandle);
                     return 0;
                 }
                 logMsg("steam_api64.dll at %p\n", api);
 
                 // Wait for Steam interfaces to initialize
+                logMsg("Sleeping 3s...\n");
                 Sleep(3000);
+                logMsg("Sleep done, resolving ISteamFriends...\n");
 
                 // Resolve ISteamFriends interface
                 void* friends = resolveSteamFriends(api);
                 if (!friends) {
                     logMsg("Failed to resolve ISteamFriends\n");
                     logClose();
+                    RemoveVectoredExceptionHandler(vehHandle);
                     return 0;
                 }
 
                 // Discover vtable index and install hook
+                logMsg("Calling findVtableIndex...\n");
                 int index = findVtableIndex(api, friends);
-                if (index < 0 || !hookVtable(friends, index))
-                    logMsg("Hook failed\n");
+                logMsg("findVtableIndex returned %d\n", index);
+                if (index >= 0) {
+                    logMsg("Calling hookVtable...\n");
+                    if (!hookVtable(friends, index))
+                        logMsg("hookVtable failed\n");
+                } else {
+                    logMsg("Hook skipped (bad index)\n");
+                }
 
                 logMsg("=== Init complete ===\n");
                 logClose();
+                RemoveVectoredExceptionHandler(vehHandle);
                 return 0;
             },
-            nullptr, 0, nullptr);
+            reinterpret_cast<LPVOID>(veh), 0, nullptr);
         if (hThread)
             CloseHandle(hThread);
     }
@@ -118,6 +157,7 @@ namespace SteamRichPresence {
             auto fn = reinterpret_cast<GetterFn>(GetProcAddress(steamApi, ver));
             if (!fn)
                 continue;
+            logMsg("  Calling %s at %p...\n", ver, fn);
             void* iface = fn();
             logMsg("  %s() -> %p\n", ver, iface);
             if (iface)
@@ -129,19 +169,27 @@ namespace SteamRichPresence {
     // Discover the vtable index by examining the flat API function's machine code.
     // Tries vtable dispatch first, then follows thunks (crack DLL -> original DLL).
     static int findVtableIndex(HMODULE steamApi, void* steamFriends) {
+        logMsg("findVtableIndex: GetProcAddress(SetRichPresence)...\n");
         auto fn = reinterpret_cast<const uint8_t*>(
             GetProcAddress(steamApi, "SteamAPI_ISteamFriends_SetRichPresence"));
-        if (!fn)
+        if (!fn) {
+            logMsg("findVtableIndex: export not found\n");
             return -1;
+        }
+        logMsg("findVtableIndex: fn at %p\n", fn);
 
         logBytes("Flat API bytes", fn, 16);
 
         // Direct vtable dispatch? (Wine/Proton, original Steam SDK)
+        logMsg("findVtableIndex: trying parseVtableDispatch (direct)...\n");
         int index = parseVtableDispatch(fn);
-        if (index >= 0)
+        if (index >= 0) {
+            logMsg("findVtableIndex: direct dispatch -> index=%d\n", index);
             return index;
+        }
 
         // Thunk? Follow it and try again (crack DLL -> original DLL's dispatch stub)
+        logMsg("findVtableIndex: trying resolveThunkTarget...\n");
         void* target = resolveThunkTarget(fn);
         if (!target) {
             logMsg("Not a recognized pattern\n");
@@ -151,12 +199,17 @@ namespace SteamRichPresence {
         logMsg("Thunk -> %p\n", target);
         logBytes("Target bytes", target, 16);
 
+        logMsg("findVtableIndex: trying parseVtableDispatch (thunk target)...\n");
         index = parseVtableDispatch(reinterpret_cast<const uint8_t*>(target));
-        if (index >= 0)
+        if (index >= 0) {
+            logMsg("findVtableIndex: thunk dispatch -> index=%d\n", index);
             return index;
+        }
 
         // Last resort: scan vtable for direct pointer match
+        logMsg("findVtableIndex: scanning vtable for match...\n");
         void** vtable = *reinterpret_cast<void***>(steamFriends);
+        logMsg("findVtableIndex: vtable at %p\n", vtable);
         if (vtable) {
             for (int i = 0; i < 200; i++) {
                 if (vtable[i] == target) {
@@ -171,17 +224,24 @@ namespace SteamRichPresence {
     }
 
     static bool hookVtable(void* steamFriends, int index) {
+        logMsg("hookVtable: index=%d, reading vtable ptr...\n", index);
         void** vtable = *reinterpret_cast<void***>(steamFriends);
-        if (!vtable)
+        if (!vtable) {
+            logMsg("hookVtable: vtable is null\n");
             return false;
+        }
 
         origSetRichPresence = reinterpret_cast<SetRichPresenceFn>(vtable[index]);
+        logMsg("hookVtable: orig=%p\n", origSetRichPresence);
         if (!origSetRichPresence)
             return false;
 
         DWORD oldProtect;
-        if (!VirtualProtect(&vtable[index], sizeof(void*), PAGE_READWRITE, &oldProtect))
+        logMsg("hookVtable: VirtualProtect...\n");
+        if (!VirtualProtect(&vtable[index], sizeof(void*), PAGE_READWRITE, &oldProtect)) {
+            logMsg("hookVtable: VirtualProtect failed (err=%lu)\n", GetLastError());
             return false;
+        }
         vtable[index] = reinterpret_cast<void*>(hookedSetRichPresence);
         VirtualProtect(&vtable[index], sizeof(void*), oldProtect, &oldProtect);
 
@@ -198,8 +258,10 @@ namespace SteamRichPresence {
     //   [48] FF 60 XX            jmp [rax+disp8]
     //   [48] FF A0 XX XX XX XX   jmp [rax+disp32]
     static int parseVtableDispatch(const uint8_t* fn) {
-        if (fn[0] != 0x48 || fn[1] != 0x8B || fn[2] != 0x01)
+        if (fn[0] != 0x48 || fn[1] != 0x8B || fn[2] != 0x01) {
+            logMsg("  parseVtableDispatch: no match (header %02X %02X %02X)\n", fn[0], fn[1], fn[2]);
             return -1;
+        }
 
         const uint8_t* p = fn + 3;
         if (*p >= 0x40 && *p <= 0x4F)
@@ -213,8 +275,10 @@ namespace SteamRichPresence {
         uint8_t reg   = (modrm >> 3) & 7;
         uint8_t rm    = modrm & 7;
 
-        if ((reg != 4 && reg != 2) || rm != 0 || mod == 0 || mod == 3)
+        if ((reg != 4 && reg != 2) || rm != 0 || mod == 0 || mod == 3) {
+            logMsg("  parseVtableDispatch: modrm mismatch (mod=%d reg=%d rm=%d)\n", mod, reg, rm);
             return -1;
+        }
 
         uint32_t offset = 0;
         if (mod == 1)
@@ -222,10 +286,12 @@ namespace SteamRichPresence {
         else
             memcpy(&offset, &p[2], 4);
 
-        if (offset == 0 || offset % 8 != 0 || offset / 8 >= 200)
+        if (offset == 0 || offset % 8 != 0 || offset / 8 >= 200) {
+            logMsg("  parseVtableDispatch: bad offset 0x%X\n", offset);
             return -1;
+        }
 
-        logMsg("Vtable dispatch: offset=0x%X, index=%u\n", offset, offset / 8);
+        logMsg("  Vtable dispatch: offset=0x%X, index=%u\n", offset, offset / 8);
         return static_cast<int>(offset / 8);
     }
 
@@ -239,7 +305,9 @@ namespace SteamRichPresence {
                 (fn[7] == 0x48 && fn[8] == 0xFF && fn[9] == 0xE0)) {
                 int32_t disp;
                 memcpy(&disp, &fn[3], 4);
-                return *reinterpret_cast<void**>(const_cast<uint8_t*>(fn) + 7 + disp);
+                auto ptr = const_cast<uint8_t*>(fn) + 7 + disp;
+                logMsg("  resolveThunk: mov+jmp pattern, disp=%d, deref %p\n", disp, ptr);
+                return *reinterpret_cast<void**>(ptr);
             }
         }
 
@@ -247,9 +315,12 @@ namespace SteamRichPresence {
         if (fn[off] == 0xFF && fn[off + 1] == 0x25) {
             int32_t disp;
             memcpy(&disp, &fn[off + 2], 4);
-            return *reinterpret_cast<void**>(const_cast<uint8_t*>(fn) + off + 6 + disp);
+            auto ptr = const_cast<uint8_t*>(fn) + off + 6 + disp;
+            logMsg("  resolveThunk: jmp [rip+d] pattern, disp=%d, deref %p\n", disp, ptr);
+            return *reinterpret_cast<void**>(ptr);
         }
 
+        logMsg("  resolveThunk: no pattern matched\n");
         return nullptr;
     }
 
