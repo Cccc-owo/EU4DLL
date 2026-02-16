@@ -1,309 +1,53 @@
+// Steam Rich Presence UTF-8 conversion hook
+//
+// EU4 uses an internal escape encoding (bytes 0x10-0x13 as markers) for CJK text.
+// When the game calls ISteamFriends::SetRichPresence(), the value contains these
+// escape markers instead of proper UTF-8, causing garbled text in Steam's UI.
+//
+// This hook intercepts SetRichPresence via the ISteamFriends vtable, converts the
+// escape-encoded text to UTF-8 on the fly, then forwards to the original function.
+//
+// The vtable index for SetRichPresence is discovered dynamically by parsing the
+// machine code of the flat API export SteamAPI_ISteamFriends_SetRichPresence:
+//   - Wine/Proton + original Steam SDK: the export is a vtable dispatch stub
+//     (mov rax,[rcx]; jmp [rax+offset]) — the offset directly gives the index.
+//   - Crack DLLs: the export is a thunk that forwards to the original DLL's stub.
+//     We follow the thunk and parse the target as a vtable dispatch.
+
 #include "../escape_tool.h"
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
-#include <vector>
 
 namespace SteamRichPresence {
 
+// ---- Forward declarations ----
+
+static void  logOpen();
+static void  logClose();
+static void  logMsg(const char* fmt, ...);
+static void  logBytes(const char* label, const void* data, int len);
+
+static bool        hasEscapedChars(const char* text);
+static std::string convertToUtf8(const char* text);
+
 typedef bool (*SetRichPresenceFn)(void* self, const char* pchKey, const char* pchValue);
-typedef void* (*SteamInterfaceGetterFn)();
-
-typedef uint64_t (*FlatGetSteamIDFn)(void* self);
-typedef int (*FlatGetKeyCountFn)(void* self, uint64_t steamID);
-typedef const char* (*FlatGetKeyByIndexFn)(void* self, uint64_t steamID, int iKey);
-typedef const char* (*FlatGetRichPresenceFn)(void* self, uint64_t steamID, const char* pchKey);
-typedef bool (*FlatSetRichPresenceFn)(void* self, const char* pchKey, const char* pchValue);
-
 static SetRichPresenceFn origSetRichPresence = nullptr;
+static bool hookedSetRichPresence(void* self, const char* pchKey, const char* pchValue);
 
-static FILE* logFile = nullptr;
+static int   parseVtableDispatch(const uint8_t* fn);
+static void* resolveThunkTarget(const uint8_t* fn);
 
-static void logOpen() {
-    if (logFile) return;
-    char path[MAX_PATH];
-    if (GetModuleFileNameA(nullptr, path, MAX_PATH)) {
-        char* s = strrchr(path, '\\');
-        if (s) strcpy(s + 1, "steam_rp_debug.log");
-        logFile = fopen(path, "w");
-    }
-}
+static void* resolveSteamFriends(HMODULE steamApi);
+static int   findVtableIndex(HMODULE steamApi, void* steamFriends);
+static bool  hookVtable(void* steamFriends, int index);
 
-static void logMsg(const char* fmt, ...) {
-    if (!logFile) return;
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(logFile, fmt, ap);
-    va_end(ap);
-    fflush(logFile);
-}
-
-static void logHex(const char* label, const char* data) {
-    if (!logFile || !data) return;
-    fprintf(logFile, "%s: \"", label);
-    for (const uint8_t* p = reinterpret_cast<const uint8_t*>(data); *p; ++p)
-        fprintf(logFile, "\\x%02X", *p);
-    fprintf(logFile, "\"\n");
-    fflush(logFile);
-}
-
-// Check for escape encoding markers (0x10-0x13)
-static bool hasEscapedChars(const char* text) {
-    if (!text) return false;
-    for (const uint8_t* p = reinterpret_cast<const uint8_t*>(text); *p; ++p) {
-        if (*p >= 0x10 && *p <= 0x13)
-            return true;
-    }
-    return false;
-}
-
-// The game re-encodes raw bytes >= 0x80 as UTF-8 before SetRichPresence
-// (e.g. 0xAF -> C2 AF, 0xFC -> C3 BC). Collapse them back to single bytes.
-static std::string collapseUtf8ToRawBytes(const char* text) {
-    std::string result;
-    const uint8_t* p = reinterpret_cast<const uint8_t*>(text);
-    while (*p) {
-        if (p[0] >= 0xC2 && p[0] <= 0xC3 && (p[1] & 0xC0) == 0x80) {
-            // Two-byte UTF-8 for U+0080-U+00FF -> single byte
-            result += static_cast<char>(((p[0] & 0x1F) << 6) | (p[1] & 0x3F));
-            p += 2;
-        } else {
-            result += static_cast<char>(*p++);
-        }
-    }
-    return result;
-}
-
-// Collapse spurious UTF-8 -> decode escape encoding -> encode as proper UTF-8
-static std::string convertToUtf8(const char* text) {
-    std::string rawBytes = collapseUtf8ToRawBytes(text);
-    std::wstring wide = convertEscapedTextToWideText(rawBytes);
-    return convertWideTextToUtf8(wide);
-}
-
-// Scan SteamAPI_ISteamFriends_SetRichPresence to find the vtable offset.
-// The flat API wrapper does: mov rax,[rcx]; jmp [rax+offset]
-static int detectVtableIndex(HMODULE steamApi) {
-    auto fn = reinterpret_cast<const uint8_t*>(
-        GetProcAddress(steamApi, "SteamAPI_ISteamFriends_SetRichPresence"));
-    if (!fn) return -1;
-
-    logMsg("Flat API function at %p, scanning bytes:\n  ", fn);
-    for (int i = 0; i < 32; i++) logMsg("%02X ", fn[i]);
-    logMsg("\n");
-
-    for (int i = 0; i < 28; i++) {
-        int ffPos = -1;
-        if (fn[i] == 0xFF)
-            ffPos = i;
-        else if (fn[i] >= 0x40 && fn[i] <= 0x4F && fn[i + 1] == 0xFF)
-            ffPos = i + 1; // REX prefix
-        if (ffPos < 0) continue;
-
-        uint8_t modrm = fn[ffPos + 1];
-        uint8_t mod = (modrm >> 6) & 3;
-        uint8_t reg = (modrm >> 3) & 7;
-        uint8_t rm = modrm & 7;
-
-        if (reg != 2 && reg != 4) { i = ffPos; continue; } // not call/jmp
-        if (rm == 4 || (mod == 0 && rm == 5)) { i = ffPos; continue; } // SIB/RIP-relative
-
-        if (mod == 1) {
-            uint32_t disp = fn[ffPos + 2]; // [reg + imm8]
-            if (disp % 8 == 0 && disp / 8 > 0 && disp / 8 < 200) {
-                logMsg("Detected vtable index %u (offset 0x%X) via imm8 at byte %d\n", disp / 8, disp, ffPos);
-                return disp / 8;
-            }
-        } else if (mod == 2) {
-            uint32_t disp;
-            memcpy(&disp, &fn[ffPos + 2], 4); // [reg + imm32]
-            if (disp % 8 == 0 && disp / 8 > 0 && disp / 8 < 200) {
-                logMsg("Detected vtable index %u (offset 0x%X) via imm32 at byte %d\n", disp / 8, disp, ffPos);
-                return disp / 8;
-            }
-        }
-
-        i = ffPos;
-    }
-
-    logMsg("Failed to detect vtable index from flat API\n");
-    return -1;
-}
-
-// Vtable hook: intercept SetRichPresence and convert escaped text to UTF-8
-static bool hookedSetRichPresence(void* self, const char* pchKey, const char* pchValue) {
-    if (pchValue && hasEscapedChars(pchValue)) {
-        logHex(pchKey ? pchKey : "(null)", pchValue);
-        std::string utf8Value = convertToUtf8(pchValue);
-        logMsg("  -> UTF-8: \"%s\"\n", utf8Value.c_str());
-        return origSetRichPresence(self, pchKey, utf8Value.c_str());
-    }
-    return origSetRichPresence(self, pchKey, pchValue);
-}
-
-static bool hookVtable(void* steamFriends, int vtableIndex) {
-    if (!steamFriends || vtableIndex < 0) return false;
-
-    void** vtable = *reinterpret_cast<void***>(steamFriends);
-    if (!vtable) return false;
-
-    origSetRichPresence = reinterpret_cast<SetRichPresenceFn>(vtable[vtableIndex]);
-    if (!origSetRichPresence) return false;
-
-    logMsg("Hooking vtable[%d] = %p -> %p\n", vtableIndex, origSetRichPresence, hookedSetRichPresence);
-
-    DWORD oldProtect;
-    if (!VirtualProtect(&vtable[vtableIndex], sizeof(void*), PAGE_READWRITE, &oldProtect))
-        return false;
-
-    vtable[vtableIndex] = reinterpret_cast<void*>(hookedSetRichPresence);
-    VirtualProtect(&vtable[vtableIndex], sizeof(void*), oldProtect, &oldProtect);
-
-    return true;
-}
-
-// Polling fallback: periodically fix garbled values via flat API
-
-struct FlatAPI {
-    FlatSetRichPresenceFn setRP;
-    FlatGetSteamIDFn getSteamID;
-    FlatGetKeyCountFn getKeyCount;
-    FlatGetKeyByIndexFn getKeyByIndex;
-    FlatGetRichPresenceFn getRichPresence;
-    void* steamFriends;
-    void* steamUser;
-};
-
-static bool initFlatAPI(HMODULE steamApi, void* steamFriends, FlatAPI& api) {
-    api.steamFriends = steamFriends;
-
-    api.setRP = reinterpret_cast<FlatSetRichPresenceFn>(
-        GetProcAddress(steamApi, "SteamAPI_ISteamFriends_SetRichPresence"));
-    api.getSteamID = reinterpret_cast<FlatGetSteamIDFn>(
-        GetProcAddress(steamApi, "SteamAPI_ISteamUser_GetSteamID"));
-    api.getKeyCount = reinterpret_cast<FlatGetKeyCountFn>(
-        GetProcAddress(steamApi, "SteamAPI_ISteamFriends_GetFriendRichPresenceKeyCount"));
-    api.getKeyByIndex = reinterpret_cast<FlatGetKeyByIndexFn>(
-        GetProcAddress(steamApi, "SteamAPI_ISteamFriends_GetFriendRichPresenceKeyByIndex"));
-    api.getRichPresence = reinterpret_cast<FlatGetRichPresenceFn>(
-        GetProcAddress(steamApi, "SteamAPI_ISteamFriends_GetFriendRichPresence"));
-
-    if (!api.setRP || !api.getSteamID || !api.getKeyCount || !api.getKeyByIndex || !api.getRichPresence) {
-        logMsg("initFlatAPI: missing functions (setRP=%p getSteamID=%p getKeyCount=%p getKeyByIndex=%p getRichPresence=%p)\n",
-               api.setRP, api.getSteamID, api.getKeyCount, api.getKeyByIndex, api.getRichPresence);
-        return false;
-    }
-
-    const char* userVersions[] = {
-        "SteamAPI_SteamUser_v023", "SteamAPI_SteamUser_v022", "SteamAPI_SteamUser_v021",
-    };
-    SteamInterfaceGetterFn userGetter = nullptr;
-    for (auto ver : userVersions) {
-        userGetter = reinterpret_cast<SteamInterfaceGetterFn>(GetProcAddress(steamApi, ver));
-        if (userGetter) break;
-    }
-    if (!userGetter) { logMsg("initFlatAPI: no SteamUser getter\n"); return false; }
-
-    api.steamUser = userGetter();
-    if (!api.steamUser) { logMsg("initFlatAPI: SteamUser is null\n"); return false; }
-
-    return true;
-}
-
-static void fixValuesViaFlatAPI(const FlatAPI& api) {
-    uint64_t localID = api.getSteamID(api.steamUser);
-    int count = api.getKeyCount(api.steamFriends, localID);
-
-    struct KV { std::string key, val; };
-    std::vector<KV> toFix;
-
-    for (int i = 0; i < count; i++) {
-        const char* key = api.getKeyByIndex(api.steamFriends, localID, i);
-        if (!key) continue;
-        const char* value = api.getRichPresence(api.steamFriends, localID, key);
-        if (!value || !hasEscapedChars(value)) continue;
-
-        toFix.push_back({key, convertToUtf8(value)});
-    }
-
-    for (const auto& kv : toFix) {
-        logMsg("Poll fix: \"%s\" -> \"%s\"\n", kv.key.c_str(), kv.val.c_str());
-        api.setRP(api.steamFriends, kv.key.c_str(), kv.val.c_str());
-    }
-}
-
-// Background thread: wait for Steam API, install hook, then poll as fallback
-static DWORD WINAPI DelayedInit(LPVOID) {
-    logOpen();
-    logMsg("=== Steam Rich Presence hook init ===\n");
-
-    // Wait for steam_api64.dll (up to 30s)
-    HMODULE steamApi = nullptr;
-    for (int i = 0; i < 300 && !steamApi; i++) {
-        Sleep(100);
-        steamApi = GetModuleHandleA("steam_api64.dll");
-    }
-    if (!steamApi) { logMsg("steam_api64.dll not found\n"); return 0; }
-    logMsg("steam_api64.dll at %p\n", steamApi);
-
-    // Auto-detect vtable index from flat API wrapper
-    int vtableIndex = detectVtableIndex(steamApi);
-    if (vtableIndex < 0) {
-        logMsg("Using fallback vtable index 43\n");
-        vtableIndex = 43;
-    }
-
-    // Resolve ISteamFriends getter
-    const char* versions[] = {
-        "SteamAPI_SteamFriends_v017", "SteamAPI_SteamFriends_v016", "SteamAPI_SteamFriends_v015",
-    };
-    SteamInterfaceGetterFn getter = nullptr;
-    for (auto ver : versions) {
-        getter = reinterpret_cast<SteamInterfaceGetterFn>(GetProcAddress(steamApi, ver));
-        if (getter) { logMsg("Using %s\n", ver); break; }
-    }
-    if (!getter) { logMsg("No SteamFriends getter found\n"); return 0; }
-
-    // Wait for ISteamFriends (up to 10s)
-    void* steamFriends = nullptr;
-    for (int i = 0; i < 100 && !steamFriends; i++) {
-        Sleep(100);
-        steamFriends = getter();
-    }
-    if (!steamFriends) { logMsg("SteamFriends is null (Steam not running?)\n"); return 0; }
-    logMsg("SteamFriends at %p\n", steamFriends);
-
-    // Vtable hook for real-time interception
-    bool vtableHooked = hookVtable(steamFriends, vtableIndex);
-    if (vtableHooked)
-        logMsg("Vtable hook installed successfully\n");
-    else
-        logMsg("Vtable hook failed, relying on polling fallback\n");
-
-    // Polling fallback via flat API
-    FlatAPI flatApi = {};
-    bool hasFlatApi = initFlatAPI(steamApi, steamFriends, flatApi);
-
-    if (hasFlatApi) {
-        logMsg("Running initial fix...\n");
-        fixValuesViaFlatAPI(flatApi);
-
-        logMsg("Starting polling loop (every 5 seconds)\n");
-        for (;;) {
-            Sleep(5000);
-            fixValuesViaFlatAPI(flatApi);
-        }
-    } else {
-        logMsg("Flat API init failed, no polling fallback available\n");
-    }
-
-    logMsg("=== Init complete ===\n");
-    return 0;
-}
+// ---- Init (entry point) ----
 
 void Init() {
-    // Skip if steam_api64.dll is neither loaded nor present on disk
+    // Only proceed if steam_api64.dll exists (loaded or on disk)
     HMODULE steamApi = GetModuleHandleA("steam_api64.dll");
     if (!steamApi) {
         char path[MAX_PATH];
@@ -317,9 +61,245 @@ void Init() {
         }
     }
 
-    HANDLE hThread = CreateThread(nullptr, 0, DelayedInit, nullptr, 0, nullptr);
-    if (hThread)
-        CloseHandle(hThread);
+    HANDLE hThread = CreateThread(nullptr, 0,
+        [](LPVOID) -> DWORD {
+            logOpen();
+            logMsg("=== Steam Rich Presence hook init ===\n");
+
+            // Wait for steam_api64.dll to load (up to 30s)
+            HMODULE api = nullptr;
+            for (int i = 0; i < 300 && !api; i++) {
+                Sleep(100);
+                api = GetModuleHandleA("steam_api64.dll");
+            }
+            if (!api) { logMsg("steam_api64.dll not found\n"); logClose(); return 0; }
+            logMsg("steam_api64.dll at %p\n", api);
+
+            // Wait for Steam interfaces to initialize
+            Sleep(3000);
+
+            // Resolve ISteamFriends interface
+            void* friends = resolveSteamFriends(api);
+            if (!friends) { logMsg("Failed to resolve ISteamFriends\n"); logClose(); return 0; }
+
+            // Discover vtable index and install hook
+            int index = findVtableIndex(api, friends);
+            if (index < 0 || !hookVtable(friends, index))
+                logMsg("Hook failed\n");
+
+            logMsg("=== Init complete ===\n");
+            logClose();
+            return 0;
+        },
+        nullptr, 0, nullptr);
+    if (hThread) CloseHandle(hThread);
+}
+
+// ---- Vtable hook setup ----
+
+static void* resolveSteamFriends(HMODULE steamApi) {
+    typedef void* (*GetterFn)();
+    const char* versions[] = {
+        "SteamAPI_SteamFriends_v017", "SteamAPI_SteamFriends_v016", "SteamAPI_SteamFriends_v015",
+    };
+    for (auto ver : versions) {
+        auto fn = reinterpret_cast<GetterFn>(GetProcAddress(steamApi, ver));
+        if (!fn) continue;
+        void* iface = fn();
+        logMsg("  %s() -> %p\n", ver, iface);
+        if (iface) return iface;
+    }
+    return nullptr;
+}
+
+// Discover the vtable index by examining the flat API function's machine code.
+// Tries vtable dispatch first, then follows thunks (crack DLL -> original DLL).
+static int findVtableIndex(HMODULE steamApi, void* steamFriends) {
+    auto fn = reinterpret_cast<const uint8_t*>(
+        GetProcAddress(steamApi, "SteamAPI_ISteamFriends_SetRichPresence"));
+    if (!fn) return -1;
+
+    logBytes("Flat API bytes", fn, 16);
+
+    // Direct vtable dispatch? (Wine/Proton, original Steam SDK)
+    int index = parseVtableDispatch(fn);
+    if (index >= 0) return index;
+
+    // Thunk? Follow it and try again (crack DLL -> original DLL's dispatch stub)
+    void* target = resolveThunkTarget(fn);
+    if (!target) { logMsg("Not a recognized pattern\n"); return -1; }
+
+    logMsg("Thunk -> %p\n", target);
+    logBytes("Target bytes", target, 16);
+
+    index = parseVtableDispatch(reinterpret_cast<const uint8_t*>(target));
+    if (index >= 0) return index;
+
+    // Last resort: scan vtable for direct pointer match
+    void** vtable = *reinterpret_cast<void***>(steamFriends);
+    if (vtable) {
+        for (int i = 0; i < 200; i++) {
+            if (vtable[i] == target) {
+                logMsg("vtable[%d] matches target\n", i);
+                return i;
+            }
+        }
+    }
+
+    logMsg("Failed to determine vtable index\n");
+    return -1;
+}
+
+static bool hookVtable(void* steamFriends, int index) {
+    void** vtable = *reinterpret_cast<void***>(steamFriends);
+    if (!vtable) return false;
+
+    origSetRichPresence = reinterpret_cast<SetRichPresenceFn>(vtable[index]);
+    if (!origSetRichPresence) return false;
+
+    DWORD oldProtect;
+    if (!VirtualProtect(&vtable[index], sizeof(void*), PAGE_READWRITE, &oldProtect))
+        return false;
+    vtable[index] = reinterpret_cast<void*>(hookedSetRichPresence);
+    VirtualProtect(&vtable[index], sizeof(void*), oldProtect, &oldProtect);
+
+    logMsg("Hooked vtable[%d]: %p -> %p\n", index, origSetRichPresence, hookedSetRichPresence);
+    return true;
+}
+
+// ---- x86-64 instruction parsing ----
+
+// Parse a vtable dispatch stub: mov rax,[rcx]; jmp/call [rax+offset]
+// Returns vtable index (offset/8), or -1 if the bytes don't match.
+//
+//   48 8B 01                 mov rax, [rcx]
+//   [48] FF 60 XX            jmp [rax+disp8]
+//   [48] FF A0 XX XX XX XX   jmp [rax+disp32]
+static int parseVtableDispatch(const uint8_t* fn) {
+    if (fn[0] != 0x48 || fn[1] != 0x8B || fn[2] != 0x01)
+        return -1;
+
+    const uint8_t* p = fn + 3;
+    if (*p >= 0x40 && *p <= 0x4F) p++;
+
+    if (*p != 0xFF) return -1;
+
+    uint8_t modrm = p[1];
+    uint8_t mod = (modrm >> 6) & 3;
+    uint8_t reg = (modrm >> 3) & 7;
+    uint8_t rm  = modrm & 7;
+
+    if ((reg != 4 && reg != 2) || rm != 0 || mod == 0 || mod == 3)
+        return -1;
+
+    uint32_t offset = 0;
+    if (mod == 1)
+        offset = p[2];
+    else
+        memcpy(&offset, &p[2], 4);
+
+    if (offset == 0 || offset % 8 != 0 || offset / 8 >= 200)
+        return -1;
+
+    logMsg("Vtable dispatch: offset=0x%X, index=%u\n", offset, offset / 8);
+    return static_cast<int>(offset / 8);
+}
+
+// Resolve the target address of a thunk (indirect jump via RIP-relative pointer).
+//
+//   48 8B 05 [d32] {FF E0 | 48 FF E0}   mov rax,[rip+d]; jmp rax
+//   [48] FF 25 [d32]                     jmp [rip+d]
+static void* resolveThunkTarget(const uint8_t* fn) {
+    if (fn[0] == 0x48 && fn[1] == 0x8B && fn[2] == 0x05) {
+        if ((fn[7] == 0xFF && fn[8] == 0xE0) ||
+            (fn[7] == 0x48 && fn[8] == 0xFF && fn[9] == 0xE0)) {
+            int32_t disp;
+            memcpy(&disp, &fn[3], 4);
+            return *reinterpret_cast<void**>(const_cast<uint8_t*>(fn) + 7 + disp);
+        }
+    }
+
+    int off = (fn[0] == 0x48) ? 1 : 0;
+    if (fn[off] == 0xFF && fn[off + 1] == 0x25) {
+        int32_t disp;
+        memcpy(&disp, &fn[off + 2], 4);
+        return *reinterpret_cast<void**>(const_cast<uint8_t*>(fn) + off + 6 + disp);
+    }
+
+    return nullptr;
+}
+
+// ---- Hook callback (called at runtime for each SetRichPresence) ----
+
+static bool hookedSetRichPresence(void* self, const char* pchKey, const char* pchValue) {
+    if (pchValue && hasEscapedChars(pchValue)) {
+        std::string utf8 = convertToUtf8(pchValue);
+        logMsg("Convert: key=\"%s\" -> \"%s\"\n", pchKey ? pchKey : "(null)", utf8.c_str());
+        return origSetRichPresence(self, pchKey, utf8.c_str());
+    }
+    return origSetRichPresence(self, pchKey, pchValue);
+}
+
+// ---- Text conversion ----
+
+static bool hasEscapedChars(const char* text) {
+    if (!text) return false;
+    for (auto p = reinterpret_cast<const uint8_t*>(text); *p; ++p)
+        if (*p >= 0x10 && *p <= 0x13) return true;
+    return false;
+}
+
+// The game treats each byte of escape-encoded text as a character and re-encodes
+// bytes >= 0x80 as UTF-8 before passing to SetRichPresence (e.g. 0xAF -> C2 AF).
+// We collapse these spurious 2-byte sequences back to single bytes, then decode
+// the escape encoding to produce proper UTF-8.
+static std::string convertToUtf8(const char* text) {
+    std::string raw;
+    for (auto p = reinterpret_cast<const uint8_t*>(text); *p;) {
+        if (p[0] >= 0xC2 && p[0] <= 0xC3 && (p[1] & 0xC0) == 0x80) {
+            raw += static_cast<char>(((p[0] & 0x1F) << 6) | (p[1] & 0x3F));
+            p += 2;
+        } else {
+            raw += static_cast<char>(*p++);
+        }
+    }
+    return convertWideTextToUtf8(convertEscapedTextToWideText(raw));
+}
+
+// ---- Logging ----
+
+static FILE* logFile = nullptr;
+
+static void logOpen() {
+    if (logFile) return;
+    char path[MAX_PATH];
+    if (GetModuleFileNameA(nullptr, path, MAX_PATH)) {
+        char* s = strrchr(path, '\\');
+        if (s) strcpy(s + 1, "steam_rp_debug.log");
+        logFile = fopen(path, "w");
+    }
+}
+
+static void logClose() {
+    if (logFile) { fclose(logFile); logFile = nullptr; }
+}
+
+static void logMsg(const char* fmt, ...) {
+    if (!logFile) return;
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(logFile, fmt, ap);
+    va_end(ap);
+    fflush(logFile);
+}
+
+static void logBytes(const char* label, const void* data, int len) {
+    if (!logFile) return;
+    fprintf(logFile, "%s: ", label);
+    for (int i = 0; i < len; i++)
+        fprintf(logFile, "%02X ", reinterpret_cast<const uint8_t*>(data)[i]);
+    fprintf(logFile, "\n");
+    fflush(logFile);
 }
 
 } // namespace SteamRichPresence
