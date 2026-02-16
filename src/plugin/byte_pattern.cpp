@@ -1,380 +1,326 @@
-//Core code from Hooking.Patterns
-//https://github.com/ThirteenAG/Hooking.Patterns
+// Core code from Hooking.Patterns
+// https://github.com/ThirteenAG/Hooking.Patterns
 
 #include "byte_pattern.h"
 
-#include <windows.h>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <windows.h>
 
 // Simple split function replacing boost::algorithm::split + boost::is_any_of
-static std::vector<std::string> split_string(const std::string& str, char delimiter)
-{
-	std::vector<std::string> result;
-	std::string current;
-	for (char c : str) {
-		if (c == delimiter) {
-			if (!current.empty()) {
-				result.push_back(current);
-				current.clear();
-			}
-		} else {
-			current += c;
-		}
-	}
-	if (!current.empty()) {
-		result.push_back(current);
-	}
-	return result;
+static std::vector<std::string> split_string(const std::string& str, char delimiter) {
+    std::vector<std::string> result;
+    std::string              current;
+    for (char c : str) {
+        if (c == delimiter) {
+            if (!current.empty()) {
+                result.push_back(current);
+                current.clear();
+            }
+        } else {
+            current += c;
+        }
+    }
+    if (!current.empty()) {
+        result.push_back(current);
+    }
+    return result;
 }
 
-memory_pointer BytePattern::get(size_t index) const
-{
-	return this->_results.at(index);
+memory_pointer BytePattern::get(size_t index) const {
+    return this->_results.at(index);
 }
 
-memory_pointer BytePattern::get_first() const
-{
-	return this->get(0);
+memory_pointer BytePattern::get_first() const {
+    return this->get(0);
 }
 
-memory_pointer BytePattern::get_second() const
-{
-	return this->get(1);
+memory_pointer BytePattern::get_second() const {
+    return this->get(1);
 }
 
-void BytePattern::StartLog(const wchar_t* module_name)
-{
-	ShutdownLog();
+void BytePattern::StartLog(const wchar_t* module_name) {
+    ShutdownLog();
 
-	std::wstring filename = std::wstring(L"pattern_") + module_name + L".log";
+    std::wstring filename = std::wstring(L"pattern_") + module_name + L".log";
 
-	std::wstring exe_path(MAX_PATH, L'\0');
-	DWORD len = GetModuleFileName(NULL, exe_path.data(), static_cast<DWORD>(exe_path.size()));
-	exe_path.resize(len);
+    std::wstring exe_path(MAX_PATH, L'\0');
+    DWORD len = GetModuleFileName(NULL, exe_path.data(), static_cast<DWORD>(exe_path.size()));
+    exe_path.resize(len);
 
-	log_stream().open(std::filesystem::path { exe_path }.parent_path() / filename, std::ios::trunc);
+    log_stream().open(std::filesystem::path{exe_path}.parent_path() / filename, std::ios::trunc);
 }
 
-void BytePattern::ShutdownLog()
-{
-	log_stream().close();
+void BytePattern::ShutdownLog() {
+    log_stream().close();
 }
 
-BytePattern& BytePattern::temp_instance()
-{
-	static BytePattern instance;
+BytePattern& BytePattern::temp_instance() {
+    static BytePattern instance;
 
-	return instance;
+    return instance;
 }
 
-BytePattern::BytePattern()
-{
-	set_module();
+BytePattern::BytePattern() {
+    set_module();
 }
 
-BytePattern& BytePattern::set_pattern(std::string_view pattern_literal)
-{
-	this->transform_pattern(pattern_literal);
-	this->bm_preprocess();
+BytePattern& BytePattern::set_pattern(std::string_view pattern_literal) {
+    this->transform_pattern(pattern_literal);
+    this->bm_preprocess();
 
-	return *this;
+    return *this;
 }
 
-BytePattern& BytePattern::set_module()
-{
-	static HMODULE default_module = GetModuleHandleA(NULL);
+BytePattern& BytePattern::set_module() {
+    static HMODULE default_module = GetModuleHandleA(NULL);
 
-	return set_module(default_module);
+    return set_module(default_module);
 }
 
-BytePattern& BytePattern::set_module(memory_pointer module)
-{
-	this->get_module_ranges(module);
+BytePattern& BytePattern::set_module(memory_pointer module) {
+    this->get_module_ranges(module);
 
-	return *this;
+    return *this;
 }
 
-BytePattern& BytePattern::set_range(memory_pointer beg, memory_pointer end)
-{
-	this->_ranges.resize(1, std::make_pair(beg.address(), end.address()));
+BytePattern& BytePattern::set_range(memory_pointer beg, memory_pointer end) {
+    this->_ranges.resize(1, std::make_pair(beg.address(), end.address()));
 
-	return *this;
+    return *this;
 }
 
-BytePattern& BytePattern::search()
-{
-	this->bm_search();
+BytePattern& BytePattern::search() {
+    this->bm_search();
 
-	debug_output();
+    debug_output();
 
-	return *this;
+    return *this;
 }
 
-BytePattern& BytePattern::find_pattern(std::string_view pattern_literal)
-{
-	this->set_pattern(pattern_literal).search();
+BytePattern& BytePattern::find_pattern(std::string_view pattern_literal) {
+    this->set_pattern(pattern_literal).search();
 
-	return *this;
+    return *this;
 }
 
-std::ofstream& BytePattern::log_stream()
-{
-	static std::ofstream instance;
+std::ofstream& BytePattern::log_stream() {
+    static std::ofstream instance;
 
-	return instance;
+    return instance;
 }
 
-std::pair<uint8_t, uint8_t> BytePattern::parse_sub_pattern(std::string_view sub)
-{
-	auto digit_to_value = [](char character) {
-		if ('0' <= character && character <= '9') return (character - '0');
-		else if ('A' <= character && character <= 'F') return (character - 'A' + 10);
-		else if ('a' <= character && character <= 'f') return (character - 'a' + 10);
-		throw std::invalid_argument("Could not parse pattern."); };
+std::pair<uint8_t, uint8_t> BytePattern::parse_sub_pattern(std::string_view sub) {
+    auto digit_to_value = [](char character) {
+        if ('0' <= character && character <= '9')
+            return (character - '0');
+        else if ('A' <= character && character <= 'F')
+            return (character - 'A' + 10);
+        else if ('a' <= character && character <= 'f')
+            return (character - 'a' + 10);
+        throw std::invalid_argument("Could not parse pattern.");
+    };
 
-	std::pair<uint8_t, uint8_t> result;
+    std::pair<uint8_t, uint8_t> result;
 
-	if (sub.size() == 1)
-	{
-		if (sub[0] == '?')
-		{
-			result.first = 0;
-			result.second = 0;
-		}
-		else
-		{
-			result.first = digit_to_value(sub[0]);
-			result.second = 0xFF;
-		}
-	}
-	else if (sub.size() == 2)
-	{
-		if (sub[0] == '?' && sub[1] == '?')
-		{
-			result.first = 0;
-			result.second = 0;
-		}
-		else if (sub[0] == '?')
-		{
-			result.first = digit_to_value(sub[1]);
-			result.second = 0xF;
-		}
-		else if (sub[1] == '?')
-		{
-			result.first = (digit_to_value(sub[0]) << 4);
-			result.second = 0xF0;
-		}
-		else
-		{
-			result.first = ((digit_to_value(sub[0]) << 4) | digit_to_value(sub[1]));
-			result.second = 0xFF;
-		}
-	}
-	else
-	{
-		throw std::invalid_argument("Could not parse pattern.");
-	}
+    if (sub.size() == 1) {
+        if (sub[0] == '?') {
+            result.first  = 0;
+            result.second = 0;
+        } else {
+            result.first  = digit_to_value(sub[0]);
+            result.second = 0xFF;
+        }
+    } else if (sub.size() == 2) {
+        if (sub[0] == '?' && sub[1] == '?') {
+            result.first  = 0;
+            result.second = 0;
+        } else if (sub[0] == '?') {
+            result.first  = digit_to_value(sub[1]);
+            result.second = 0xF;
+        } else if (sub[1] == '?') {
+            result.first  = (digit_to_value(sub[0]) << 4);
+            result.second = 0xF0;
+        } else {
+            result.first  = ((digit_to_value(sub[0]) << 4) | digit_to_value(sub[1]));
+            result.second = 0xFF;
+        }
+    } else {
+        throw std::invalid_argument("Could not parse pattern.");
+    }
 
-	return result;
+    return result;
 }
 
-void BytePattern::transform_pattern(std::string_view literal)
-{
-	this->clear();
-	this->_literal.assign(literal.begin(), literal.end());
+void BytePattern::transform_pattern(std::string_view literal) {
+    this->clear();
+    this->_literal.assign(literal.begin(), literal.end());
 
-	if (literal.empty())
-	{
-		return;
-	}
+    if (literal.empty()) {
+        return;
+    }
 
-	auto sub_patterns = split_string(_literal, ' ');
+    auto sub_patterns = split_string(_literal, ' ');
 
-	try
-	{
-		for (auto& sub : sub_patterns)
-		{
-			auto pat = parse_sub_pattern(sub);
+    try {
+        for (auto& sub : sub_patterns) {
+            auto pat = parse_sub_pattern(sub);
 
-			this->_pattern.push_back(pat.first);
-			this->_mask.push_back(pat.second);
-		}
-	}
-	catch (const std::invalid_argument&)
-	{
-		this->clear();
-	}
+            this->_pattern.push_back(pat.first);
+            this->_mask.push_back(pat.second);
+        }
+    } catch (const std::invalid_argument&) {
+        this->clear();
+    }
 }
 
-void BytePattern::get_module_ranges(memory_pointer module)
-{
-	static auto getSection = [](const PIMAGE_NT_HEADERS nt_headers, unsigned section) -> PIMAGE_SECTION_HEADER
-	{
-		return reinterpret_cast<PIMAGE_SECTION_HEADER>(
-			(UCHAR*)nt_headers->OptionalHeader.DataDirectory +
-			nt_headers->OptionalHeader.NumberOfRvaAndSizes * sizeof(IMAGE_DATA_DIRECTORY) +
-			section * sizeof(IMAGE_SECTION_HEADER));
-	};
+void BytePattern::get_module_ranges(memory_pointer module) {
+    static auto getSection = [](const PIMAGE_NT_HEADERS nt_headers,
+                                unsigned                section) -> PIMAGE_SECTION_HEADER {
+        return reinterpret_cast<PIMAGE_SECTION_HEADER>(
+            (UCHAR*)nt_headers->OptionalHeader.DataDirectory +
+            nt_headers->OptionalHeader.NumberOfRvaAndSizes * sizeof(IMAGE_DATA_DIRECTORY) +
+            section * sizeof(IMAGE_SECTION_HEADER));
+    };
 
-	_ranges.clear();
-	std::pair<uintptr_t, uintptr_t> range;
+    _ranges.clear();
+    std::pair<uintptr_t, uintptr_t> range;
 
-	PIMAGE_DOS_HEADER dosHeader = module.pointer<IMAGE_DOS_HEADER>();
-	PIMAGE_NT_HEADERS ntHeader = module.pointer<IMAGE_NT_HEADERS>(dosHeader->e_lfanew);
+    PIMAGE_DOS_HEADER dosHeader = module.pointer<IMAGE_DOS_HEADER>();
+    PIMAGE_NT_HEADERS ntHeader  = module.pointer<IMAGE_NT_HEADERS>(dosHeader->e_lfanew);
 
-	for (int i = 0; i < ntHeader->FileHeader.NumberOfSections; i++)
-	{
-		auto sec = getSection(ntHeader, i);
-		auto secSize = sec->SizeOfRawData != 0 ? sec->SizeOfRawData : sec->Misc.VirtualSize;
+    for (int i = 0; i < ntHeader->FileHeader.NumberOfSections; i++) {
+        auto sec     = getSection(ntHeader, i);
+        auto secSize = sec->SizeOfRawData != 0 ? sec->SizeOfRawData : sec->Misc.VirtualSize;
 
-		range.first = module.address() + sec->VirtualAddress;
+        range.first = module.address() + sec->VirtualAddress;
 
-		std::string info = std::string(reinterpret_cast<const char*>(sec->Name),
-			strnlen(reinterpret_cast<const char*>(sec->Name), sizeof(sec->Name))) +
-			" " + std::to_string(secSize) + " " + std::to_string(sec->VirtualAddress);
+        std::string info =
+            std::string(reinterpret_cast<const char*>(sec->Name),
+                        strnlen(reinterpret_cast<const char*>(sec->Name), sizeof(sec->Name))) +
+            " " + std::to_string(secSize) + " " + std::to_string(sec->VirtualAddress);
 
-		BytePattern::LoggingInfo(info);
+        BytePattern::LoggingInfo(info);
 
-		if (memcmp((const char*)sec->Name, ".text", 6) == 0 ||
-			memcmp((const char*)sec->Name, ".rdata", 7) == 0 ||
-			memcmp((const char*)sec->Name, ".data", 6) == 0)
-		{
-			range.second = range.first + secSize;
-			this->_ranges.emplace_back(range);
-		}
+        if (memcmp((const char*)sec->Name, ".text", 6) == 0 ||
+            memcmp((const char*)sec->Name, ".rdata", 7) == 0 ||
+            memcmp((const char*)sec->Name, ".data", 6) == 0) {
+            range.second = range.first + secSize;
+            this->_ranges.emplace_back(range);
+        }
 
-		if ((i == ntHeader->FileHeader.NumberOfSections - 1) && _ranges.empty())
-			this->_ranges.emplace_back(module.address(), module.address() + sec->PointerToRawData + secSize);
-	}
+        if ((i == ntHeader->FileHeader.NumberOfSections - 1) && _ranges.empty())
+            this->_ranges.emplace_back(module.address(),
+                                       module.address() + sec->PointerToRawData + secSize);
+    }
 }
 
-void BytePattern::clear()
-{
-	this->_literal.clear();
-	this->_pattern.clear();
-	this->_mask.clear();
-	this->_results.clear();
+void BytePattern::clear() {
+    this->_literal.clear();
+    this->_pattern.clear();
+    this->_mask.clear();
+    this->_results.clear();
 }
 
-size_t BytePattern::count() const
-{
-	return this->_results.size();
+size_t BytePattern::count() const {
+    return this->_results.size();
 }
 
-bool BytePattern::has_size(size_t expected, const std::string& desc) const
-{
-	const bool result = (this->_results.size() == expected);
+bool BytePattern::has_size(size_t expected, const std::string& desc) const {
+    const bool result = (this->_results.size() == expected);
 
-	LoggingInfo(desc + (result ? ":[OK]" : ":[NG]"));
+    LoggingInfo(desc + (result ? ":[OK]" : ":[NG]"));
 
-	return result;
+    return result;
 }
 
-bool BytePattern::empty() const
-{
-	return this->_results.empty();
+bool BytePattern::empty() const {
+    return this->_results.empty();
 }
 
-void BytePattern::bm_preprocess()
-{
-	ptrdiff_t index;
+void BytePattern::bm_preprocess() {
+    ptrdiff_t index;
 
-	const uint8_t* pbytes = this->_pattern.data();
-	const uint8_t* pmask = this->_mask.data();
-	size_t pattern_len = this->_pattern.size();
+    const uint8_t* pbytes      = this->_pattern.data();
+    const uint8_t* pmask       = this->_mask.data();
+    size_t         pattern_len = this->_pattern.size();
 
-	for (uint32_t bc = 0; bc < 256; ++bc)
-	{
-		for (index = pattern_len - 1; index >= 0; --index)
-		{
-			if ((pbytes[index] & pmask[index]) == (bc & pmask[index]))
-			{
-				break;
-			}
-		}
+    for (uint32_t bc = 0; bc < 256; ++bc) {
+        for (index = pattern_len - 1; index >= 0; --index) {
+            if ((pbytes[index] & pmask[index]) == (bc & pmask[index])) {
+                break;
+            }
+        }
 
-		this->_bmbc[bc] = index;
-	}
+        this->_bmbc[bc] = index;
+    }
 }
 
-void BytePattern::bm_search()
-{
-	const uint8_t* pbytes = this->_pattern.data();
-	const uint8_t* pmask = this->_mask.data();
-	size_t pattern_len = this->_pattern.size();
+void BytePattern::bm_search() {
+    const uint8_t* pbytes      = this->_pattern.data();
+    const uint8_t* pmask       = this->_mask.data();
+    size_t         pattern_len = this->_pattern.size();
 
-	this->_results.clear();
+    this->_results.clear();
 
-	if (pattern_len == 0)
-	{
-		return;
-	}
+    if (pattern_len == 0) {
+        return;
+    }
 
-	for (auto& range : this->_ranges)
-	{
-		uint8_t* range_begin = reinterpret_cast<uint8_t*>(range.first);
-		uint8_t* range_end = reinterpret_cast<uint8_t*>(range.second - pattern_len);
+    for (auto& range : this->_ranges) {
+        uint8_t* range_begin = reinterpret_cast<uint8_t*>(range.first);
+        uint8_t* range_end   = reinterpret_cast<uint8_t*>(range.second - pattern_len);
 
-		ptrdiff_t index;
+        ptrdiff_t index;
 
-		// Replace MSVC __try/__except with plain try-catch for MinGW compatibility
-		// On access violation, we simply stop searching the current range
-		while (range_begin <= range_end)
-		{
-			for (index = pattern_len - 1; index >= 0; --index)
-			{
-				if ((pbytes[index] & pmask[index]) != (range_begin[index] & pmask[index]))
-				{
-					break;
-				}
-			}
+        // Replace MSVC __try/__except with plain try-catch for MinGW compatibility
+        // On access violation, we simply stop searching the current range
+        while (range_begin <= range_end) {
+            for (index = pattern_len - 1; index >= 0; --index) {
+                if ((pbytes[index] & pmask[index]) != (range_begin[index] & pmask[index])) {
+                    break;
+                }
+            }
 
-			if (index == -1)
-			{
-				this->_results.emplace_back(range_begin);
-				range_begin += pattern_len;
-			}
-			else
-			{
-				range_begin += std::max(index - this->_bmbc[range_begin[index]], (ptrdiff_t)1);
-			}
-		}
-	}
+            if (index == -1) {
+                this->_results.emplace_back(range_begin);
+                range_begin += pattern_len;
+            } else {
+                range_begin += std::max(index - this->_bmbc[range_begin[index]], (ptrdiff_t)1);
+            }
+        }
+    }
 }
 
-void BytePattern::debug_output() const
-{
-	if (!log_stream().is_open())
-		return;
+void BytePattern::debug_output() const {
+    if (!log_stream().is_open())
+        return;
 
-	log_stream() << std::hex << std::uppercase;
+    log_stream() << std::hex << std::uppercase;
 
-	log_stream() << "Result(s) of pattern: " << _literal << '\n';
+    log_stream() << "Result(s) of pattern: " << _literal << '\n';
 
-	if (count() > 0)
-	{
-		for_each_result(
-			[this](memory_pointer pointer)
-			{
-				log_stream() << "0x" << pointer.address() << '\n';
-			});
-	}
-	else
-	{
-		log_stream() << "None\n";
-	}
+    if (count() > 0) {
+        for_each_result(
+            [this](memory_pointer pointer) { log_stream() << "0x" << pointer.address() << '\n'; });
+    } else {
+        log_stream() << "None\n";
+    }
 
-	log_stream() << "--------------------------------------------------------------------------------------" << std::endl;
+    log_stream()
+        << "--------------------------------------------------------------------------------------"
+        << std::endl;
 }
 
-void BytePattern::LoggingInfo(const std::string& message)
-{
-	if (!log_stream().is_open())
-		return;
+void BytePattern::LoggingInfo(const std::string& message) {
+    if (!log_stream().is_open())
+        return;
 
-	log_stream() << message << "\n";
+    log_stream() << message << "\n";
 
-	log_stream() << "--------------------------------------------------------------------------------------" << '\n' << std::endl;
+    log_stream()
+        << "--------------------------------------------------------------------------------------"
+        << '\n'
+        << std::endl;
 }
