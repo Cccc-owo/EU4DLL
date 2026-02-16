@@ -36,36 +36,36 @@ inline wchar_t UCS2ToCP1252(int cp) {
 	return result;
 }
 
-inline wchar_t CP1252ToUCS2(char cp) {
+inline wchar_t CP1252ToUCS2(unsigned char cp) {
 	wchar_t result = cp;
 	switch (cp) {
-	case (char)0x80: result = 0x20AC; break;
-	case (char)0x82: result = 0x201A; break;
-	case (char)0x83: result = 0x0192; break;
-	case (char)0x84: result = 0x201E; break;
-	case (char)0x85: result = 0x2026; break;
-	case (char)0x86: result = 0x2020; break;
-	case (char)0x87: result = 0x2021; break;
-	case (char)0x88: result = 0x02C6; break;
-	case (char)0x89: result = 0x2030; break;
-	case (char)0x8A: result = 0x0160; break;
-	case (char)0x8B: result = 0x2039; break;
-	case (char)0x8C: result = 0x0152; break;
-	case (char)0x8E: result = 0x017D; break;
-	case (char)0x91: result = 0x2018; break;
-	case (char)0x92: result = 0x2019; break;
-	case (char)0x93: result = 0x201C; break;
-	case (char)0x94: result = 0x201D; break;
-	case (char)0x95: result = 0x2022; break;
-	case (char)0x96: result = 0x2013; break;
-	case (char)0x97: result = 0x2014; break;
-	case (char)0x98: result = 0x02DC; break;
-	case (char)0x99: result = 0x2122; break;
-	case (char)0x9A: result = 0x0161; break;
-	case (char)0x9B: result = 0x203A; break;
-	case (char)0x9C: result = 0x0153; break;
-	case (char)0x9E: result = 0x017E; break;
-	case (char)0x9F: result = 0x0178; break;
+	case 0x80: result = 0x20AC; break;
+	case 0x82: result = 0x201A; break;
+	case 0x83: result = 0x0192; break;
+	case 0x84: result = 0x201E; break;
+	case 0x85: result = 0x2026; break;
+	case 0x86: result = 0x2020; break;
+	case 0x87: result = 0x2021; break;
+	case 0x88: result = 0x02C6; break;
+	case 0x89: result = 0x2030; break;
+	case 0x8A: result = 0x0160; break;
+	case 0x8B: result = 0x2039; break;
+	case 0x8C: result = 0x0152; break;
+	case 0x8E: result = 0x017D; break;
+	case 0x91: result = 0x2018; break;
+	case 0x92: result = 0x2019; break;
+	case 0x93: result = 0x201C; break;
+	case 0x94: result = 0x201D; break;
+	case 0x95: result = 0x2022; break;
+	case 0x96: result = 0x2013; break;
+	case 0x97: result = 0x2014; break;
+	case 0x98: result = 0x02DC; break;
+	case 0x99: result = 0x2122; break;
+	case 0x9A: result = 0x0161; break;
+	case 0x9B: result = 0x203A; break;
+	case 0x9C: result = 0x0153; break;
+	case 0x9E: result = 0x017E; break;
+	case 0x9F: result = 0x0178; break;
 	default:break;
 	}
 
@@ -84,8 +84,9 @@ std::string convertWideTextToEscapedText(const wchar_t* from) {
 	for (unsigned int fromIndex = 0; fromIndex < size; fromIndex++) {
 		wchar_t cp = from[fromIndex];
 
-		if (UCS2ToCP1252(cp) != cp) {
-			result += static_cast<char>(static_cast<BYTE>(cp));
+		wchar_t mapped = UCS2ToCP1252(cp);
+		if (mapped != cp) {
+			result += static_cast<char>(static_cast<BYTE>(mapped));
 			continue;
 		}
 
@@ -162,6 +163,7 @@ std::wstring convertEscapedTextToWideText(const std::string& from) {
 
 		switch (cp) {
 		case 0x10:case 0x11:case 0x12:case 0x13:
+			if (fromIndex + 2 > from.length()) return result;
 			low = (BYTE)from[fromIndex++];
 			high = (BYTE)from[fromIndex++];
 

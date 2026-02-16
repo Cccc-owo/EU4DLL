@@ -231,7 +231,8 @@ void BytePattern::get_module_ranges(memory_pointer module)
 
 		range.first = module.address() + sec->VirtualAddress;
 
-		std::string info = std::string(reinterpret_cast<const char*>(sec->Name)) +
+		std::string info = std::string(reinterpret_cast<const char*>(sec->Name),
+			strnlen(reinterpret_cast<const char*>(sec->Name), sizeof(sec->Name))) +
 			" " + std::to_string(secSize) + " " + std::to_string(sec->VirtualAddress);
 
 		BytePattern::LoggingInfo(info);
