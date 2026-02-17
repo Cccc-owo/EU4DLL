@@ -106,6 +106,7 @@ struct RunOptions {
     bool autoUtf8Conversion;
     int  separateCharacterCodePoint;
     int  lineBreakBufferWidth;
+    bool steamRichPresence;
 };
 
 namespace Version {

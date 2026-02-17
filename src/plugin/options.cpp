@@ -36,5 +36,6 @@ namespace Ini {
             readBool(ini, L"REVERSING_WORDS_BATTLE_OF_AREA", true);
         options->lineBreakBufferWidth = readInt(ini, L"LINE_BREAK_BUFFER_WIDTH", 5);
         options->autoUtf8Conversion   = readBool(ini, L"AUTO_UTF8_CONVERSION", true);
+        options->steamRichPresence    = readBool(ini, L"STEAM_RICH_PRESENCE", true);
     }
 } // namespace Ini

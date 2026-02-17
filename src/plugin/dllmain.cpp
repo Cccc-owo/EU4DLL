@@ -20,7 +20,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ulReasonForCall, LPVOID lpReserved)
             FileRead::Init(options);
 
             // Steam rich presence text fix (vtable hook)
-            SteamRichPresence::Init();
+            if (options.steamRichPresence)
+                SteamRichPresence::Init();
 
             // Font loading
             e.merge(Font::Init(options));
