@@ -15,6 +15,9 @@ namespace FileRead {
     static std::unordered_map<HANDLE, HandleState> trackedHandles;
     static CRITICAL_SECTION                        handleLock;
 
+    // Cached game directory prefix for vanilla file detection
+    static std::wstring gameDirPrefix;
+
     static decltype(&CreateFileW) origCreateFileW = nullptr;
     static decltype(&ReadFile)    origReadFile    = nullptr;
     static decltype(&CloseHandle) origCloseHandle = nullptr;
@@ -40,6 +43,16 @@ namespace FileRead {
 
         std::wstring_view lext(lower, ext.size());
         return lext == L".yml" || lext == L".txt";
+    }
+
+    static bool isVanillaFile(const wchar_t* path) {
+        if (gameDirPrefix.empty() || !path)
+            return false;
+        size_t prefixLen = gameDirPrefix.size();
+        size_t pathLen   = wcslen(path);
+        if (pathLen < prefixLen)
+            return false;
+        return _wcsnicmp(path, gameDirPrefix.c_str(), prefixLen) == 0;
     }
 
     static bool needsUtf8Conversion(const char* buf, size_t len) {
@@ -154,9 +167,12 @@ namespace FileRead {
         if (h != INVALID_HANDLE_VALUE && isTextFile(lpFileName)) {
             // Only track files opened for reading
             if ((dwDesiredAccess & GENERIC_READ) && !(dwDesiredAccess & GENERIC_WRITE)) {
-                EnterCriticalSection(&handleLock);
-                trackedHandles[h] = {};
-                LeaveCriticalSection(&handleLock);
+                // Skip vanilla files — they should not be converted
+                if (!isVanillaFile(lpFileName)) {
+                    EnterCriticalSection(&handleLock);
+                    trackedHandles[h] = {};
+                    LeaveCriticalSection(&handleLock);
+                }
             }
         }
 
@@ -256,6 +272,15 @@ namespace FileRead {
             return;
 
         InitializeCriticalSection(&handleLock);
+
+        // Cache game directory prefix for vanilla file detection
+        wchar_t exePath[MAX_PATH];
+        if (GetModuleFileNameW(nullptr, exePath, MAX_PATH)) {
+            wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+            if (lastSlash) {
+                gameDirPrefix.assign(exePath, lastSlash + 1);
+            }
+        }
 
         HMODULE exeModule = GetModuleHandle(nullptr);
 
