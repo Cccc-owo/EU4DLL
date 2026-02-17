@@ -15,6 +15,7 @@
 //     We follow the thunk and parse the target as a vtable dispatch.
 
 #include "../escape_tool.h"
+#include <csetjmp>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
@@ -46,6 +47,10 @@ namespace SteamRichPresence {
 
     // ---- Init (entry point) ----
 
+    // Thread-local jump buffer for safe recovery from exceptions
+    static thread_local jmp_buf initJmpBuf;
+    static volatile DWORD       initThreadId = 0;
+
     void Init() {
         // Only proceed if steam_api64.dll exists (loaded or on disk)
         HMODULE steamApi = GetModuleHandleA("steam_api64.dll");
@@ -61,11 +66,8 @@ namespace SteamRichPresence {
             }
         }
 
-        // Thread ID used by VEH to only catch exceptions from our init thread
-        static volatile DWORD initThreadId = 0;
-
-        // Install a VEH that catches fatal crashes in our init thread and silently
-        // terminates it, so a failure here never brings down the game.
+        // Install a VEH that catches fatal crashes in our init thread and
+        // safely jumps back via longjmp instead of ExitThread.
         auto veh = AddVectoredExceptionHandler(1, [](PEXCEPTION_POINTERS ep) -> LONG {
             if (GetCurrentThreadId() != initThreadId)
                 return EXCEPTION_CONTINUE_SEARCH;
@@ -73,7 +75,6 @@ namespace SteamRichPresence {
             DWORD code = ep->ExceptionRecord->ExceptionCode;
 
             // Only intercept fatal exceptions (access violation, illegal instruction, etc.)
-            // Let non-fatal ones through (OutputDebugString, breakpoints, C++ exceptions).
             if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION &&
                 code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_INT_DIVIDE_BY_ZERO &&
                 code != EXCEPTION_PRIV_INSTRUCTION && code != EXCEPTION_IN_PAGE_ERROR)
@@ -82,7 +83,7 @@ namespace SteamRichPresence {
             logMsg("Exception 0x%08lX at %p, aborting hook\n", code,
                    ep->ExceptionRecord->ExceptionAddress);
             logClose();
-            ExitThread(1);
+            longjmp(initJmpBuf, 1);
             return EXCEPTION_CONTINUE_SEARCH; // unreachable
         });
 
@@ -94,6 +95,15 @@ namespace SteamRichPresence {
                 logOpen();
                 logMsg("=== Steam Rich Presence hook init ===\n");
 
+                // Set up safe recovery point — if any exception occurs,
+                // longjmp returns here with value 1
+                if (setjmp(initJmpBuf) != 0) {
+                    // Exception occurred, clean up and exit gracefully
+                    RemoveVectoredExceptionHandler(vehHandle);
+                    initThreadId = 0;
+                    return 0;
+                }
+
                 // Wait for steam_api64.dll to load (up to 30s)
                 HMODULE api = nullptr;
                 for (int i = 0; i < 300 && !api; i++) {
@@ -104,6 +114,7 @@ namespace SteamRichPresence {
                     logMsg("steam_api64.dll not found\n");
                     logClose();
                     RemoveVectoredExceptionHandler(vehHandle);
+                    initThreadId = 0;
                     return 0;
                 }
                 logMsg("steam_api64.dll at %p\n", api);
@@ -119,6 +130,7 @@ namespace SteamRichPresence {
                     logMsg("Failed to resolve ISteamFriends\n");
                     logClose();
                     RemoveVectoredExceptionHandler(vehHandle);
+                    initThreadId = 0;
                     return 0;
                 }
 
@@ -137,6 +149,7 @@ namespace SteamRichPresence {
                 logMsg("=== Init complete ===\n");
                 logClose();
                 RemoveVectoredExceptionHandler(vehHandle);
+                initThreadId = 0;
                 return 0;
             },
             reinterpret_cast<LPVOID>(veh), 0, nullptr);
