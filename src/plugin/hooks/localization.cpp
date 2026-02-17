@@ -49,7 +49,9 @@ namespace Localization {
     // M, Y -> YyM
     void* localizationProc6Call(ParadoxTextObject* p1, ParadoxTextObject* p2,
                                 ParadoxTextObject* p3) {
-        auto text = p3->getString() + std::string("\x0F") + p2->getString().substr(0, p2->len - 2);
+        auto p2str = p2->getString();
+        auto text  = p3->getString() + std::string("\x0F") +
+                    (p2str.length() >= 2 ? p2str.substr(0, p2str.length() - 2) : p2str);
 
         p1->len  = 0;
         p1->len2 = 0;
@@ -61,7 +63,9 @@ namespace Localization {
     // M Y -> YyM
     void* localizationProc8Call(ParadoxTextObject* p1, ParadoxTextObject* p2,
                                 ParadoxTextObject* p3) {
-        auto text = p3->getString() + std::string("\x0F") + p2->getString().substr(0, p2->len - 1);
+        auto p2str = p2->getString();
+        auto text  = p3->getString() + std::string("\x0F") +
+                    (p2str.length() >= 1 ? p2str.substr(0, p2str.length() - 1) : p2str);
 
         p1->len  = 0;
         p1->len2 = 0;

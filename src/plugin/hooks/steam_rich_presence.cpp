@@ -199,6 +199,33 @@ namespace SteamRichPresence {
                 continue;
             }
 
+            // If the getter is a thunk (jmp [rip+disp]), check that its target
+            // pointer is non-null before calling. Steam may not have filled it yet.
+            void* thunkTarget = resolveThunkTarget(fnBytes);
+            if (!thunkTarget) {
+                // Not a thunk, or target is null — for thunks, poll until ready
+                int off = (fnBytes[0] == 0x48) ? 1 : 0;
+                bool isThunk = (fnBytes[off] == 0xFF && fnBytes[off + 1] == 0x25);
+                if (!isThunk && fnBytes[0] == 0x48 && fnBytes[1] == 0x8B && fnBytes[2] == 0x05) {
+                    isThunk = true;
+                }
+                if (isThunk) {
+                    logMsg("  Getter is a thunk with null target, polling...\n");
+                    for (int wait = 0; wait < 60; wait++) {
+                        Sleep(1000);
+                        thunkTarget = resolveThunkTarget(fnBytes);
+                        if (thunkTarget) {
+                            logMsg("  Thunk target resolved after %ds: %p\n", wait + 1, thunkTarget);
+                            break;
+                        }
+                    }
+                    if (!thunkTarget) {
+                        logMsg("  Thunk target still null after 60s, skipping\n");
+                        continue;
+                    }
+                }
+            }
+
             logMsg("  Calling %s...\n", ver);
             void* iface = fn();
             logMsg("  %s() -> %p\n", ver, iface);
