@@ -11,8 +11,9 @@ namespace FileRead {
 
     struct HandleState {
         std::vector<char> pendingData;
-        size_t            readOffset    = 0;
+        size_t            readOffset     = 0;
         bool              isChecksumHook = false; // true = serve empty content
+        bool              isTxtFile      = false; // true = .txt (may be CP1252)
     };
 
     static std::unordered_map<HANDLE, HandleState> trackedHandles;
@@ -31,7 +32,7 @@ namespace FileRead {
     static decltype(&ReadFile)    origReadFile    = nullptr;
     static decltype(&CloseHandle) origCloseHandle = nullptr;
 
-    static bool isTextFile(const wchar_t* path) {
+    static bool isTextFile(const wchar_t* path, bool* isTxt = nullptr) {
         if (!path)
             return false;
 
@@ -51,7 +52,13 @@ namespace FileRead {
             lower[i] = (ext[i] >= L'A' && ext[i] <= L'Z') ? ext[i] + 32 : ext[i];
 
         std::wstring_view lext(lower, ext.size());
-        return lext == L".yml" || lext == L".txt";
+
+        if (lext == L".yml" || lext == L".txt") {
+            if (isTxt)
+                *isTxt = (lext == L".txt");
+            return true;
+        }
+        return false;
     }
 
     static bool isVanillaFile(const wchar_t* path) {
@@ -82,14 +89,26 @@ namespace FileRead {
         return true;
     }
 
-    static bool needsUtf8Conversion(const char* buf, size_t len) {
+    static bool needsUtf8Conversion(const char* buf, size_t len, bool isTxtFile) {
+        // UTF-8 BOM: file is definitively UTF-8, always convert
+        if (len >= 3 && (unsigned char)buf[0] == 0xEF &&
+            (unsigned char)buf[1] == 0xBB && (unsigned char)buf[2] == 0xBF)
+            return true;
+
         bool hasMultibyte = false;
 
         for (size_t i = 0; i < len; i++) {
             unsigned char c = (unsigned char)buf[i];
 
-            // Check for escape markers — already in escape encoding
+            // Escape markers 0x10-0x13: already in game's internal encoding
             if (c >= 0x10 && c <= 0x13)
+                return false;
+
+            // CP1252 / Latin-1 detection: only for .txt files which may use these encodings.
+            // Bytes 0x80-0xBF can only appear as continuation bytes (10xxxxxx) in valid
+            // UTF-8, never as leading bytes. If such a byte appears outside a UTF-8
+            // multibyte sequence, the file is not UTF-8.
+            if (isTxtFile && c >= 0x80 && c <= 0xBF)
                 return false;
 
             // Check for UTF-8 multibyte sequences
@@ -102,10 +121,10 @@ namespace FileRead {
                 else if ((c & 0xF8) == 0xF0)
                     seqLen = 4; // 11110xxx
                 else
-                    continue; // Invalid UTF-8 leading byte
+                    return false; // Invalid UTF-8 leading byte — not UTF-8
 
                 if (i + seqLen > len)
-                    continue; // Not enough bytes
+                    return false; // Truncated sequence — not valid UTF-8
 
                 bool valid = true;
                 for (size_t j = 1; j < seqLen; j++) {
@@ -115,10 +134,11 @@ namespace FileRead {
                     }
                 }
 
-                if (valid) {
-                    hasMultibyte = true;
-                    i += seqLen - 1; // Skip continuation bytes
-                }
+                if (!valid)
+                    return false; // Broken sequence — not valid UTF-8
+
+                hasMultibyte = true;
+                i += seqLen - 1; // Skip continuation bytes
             }
         }
 
@@ -194,6 +214,8 @@ namespace FileRead {
         if (h != INVALID_HANDLE_VALUE && (dwDesiredAccess & GENERIC_READ) &&
             !(dwDesiredAccess & GENERIC_WRITE)) {
 
+            bool txtFlag = false;
+
             // Checksum override: intercept checksum_manifest.txt and serve empty content
             if (!checksumOverride.empty() && isChecksumManifest(lpFileName)) {
                 HandleState state;
@@ -208,11 +230,13 @@ namespace FileRead {
                 return h;
             }
 
-            if (utf8ConversionEnabled && isTextFile(lpFileName)) {
+            if (utf8ConversionEnabled && isTextFile(lpFileName, &txtFlag)) {
                 // Skip vanilla files — they should not be converted
                 if (!isVanillaFile(lpFileName)) {
+                    HandleState state;
+                    state.isTxtFile = txtFlag;
                     EnterCriticalSection(&handleLock);
-                    trackedHandles[h] = {};
+                    trackedHandles[h] = std::move(state);
                     LeaveCriticalSection(&handleLock);
                 }
             }
@@ -251,7 +275,7 @@ namespace FileRead {
                                     lpOverlapped);
             }
 
-            if (!needsUtf8Conversion(fileContent.data(), fileContent.size())) {
+            if (!needsUtf8Conversion(fileContent.data(), fileContent.size(), it->second.isTxtFile)) {
                 // No conversion needed — untrack and let original ReadFile handle it
                 EnterCriticalSection(&handleLock);
                 trackedHandles.erase(hFile);
