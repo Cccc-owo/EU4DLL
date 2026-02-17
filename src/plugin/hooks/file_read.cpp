@@ -1,6 +1,8 @@
+#include "../byte_pattern.h"
 #include "../escape_tool.h"
 #include "../iat_hook.h"
 #include "../plugin_64.h"
+#include <csetjmp>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -9,7 +11,8 @@ namespace FileRead {
 
     struct HandleState {
         std::vector<char> pendingData;
-        size_t            readOffset = 0;
+        size_t            readOffset    = 0;
+        bool              isChecksumHook = false; // true = serve empty content
     };
 
     static std::unordered_map<HANDLE, HandleState> trackedHandles;
@@ -17,6 +20,12 @@ namespace FileRead {
 
     // Cached game directory prefix for vanilla file detection
     static std::wstring gameDirPrefix;
+
+    // Checksum override config (empty = disabled)
+    static std::string checksumOverride;
+
+    // Whether UTF-8 auto conversion is enabled
+    static bool utf8ConversionEnabled = false;
 
     static decltype(&CreateFileW) origCreateFileW = nullptr;
     static decltype(&ReadFile)    origReadFile    = nullptr;
@@ -53,6 +62,24 @@ namespace FileRead {
         if (pathLen < prefixLen)
             return false;
         return _wcsnicmp(path, gameDirPrefix.c_str(), prefixLen) == 0;
+    }
+
+    static bool isChecksumManifest(const wchar_t* path) {
+        if (!path)
+            return false;
+        // Match filename "checksum_manifest.txt" at end of path
+        const wchar_t* name   = L"checksum_manifest.txt";
+        size_t         nameLen = wcslen(name);
+        size_t         pathLen = wcslen(path);
+        if (pathLen < nameLen)
+            return false;
+        const wchar_t* tail = path + pathLen - nameLen;
+        if (_wcsicmp(tail, name) != 0)
+            return false;
+        // Ensure it's preceded by a path separator or is the entire path
+        if (tail != path && tail[-1] != L'\\' && tail[-1] != L'/')
+            return false;
+        return true;
     }
 
     static bool needsUtf8Conversion(const char* buf, size_t len) {
@@ -164,9 +191,24 @@ namespace FileRead {
         HANDLE h = origCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes,
                                    dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 
-        if (h != INVALID_HANDLE_VALUE && isTextFile(lpFileName)) {
-            // Only track files opened for reading
-            if ((dwDesiredAccess & GENERIC_READ) && !(dwDesiredAccess & GENERIC_WRITE)) {
+        if (h != INVALID_HANDLE_VALUE && (dwDesiredAccess & GENERIC_READ) &&
+            !(dwDesiredAccess & GENERIC_WRITE)) {
+
+            // Checksum override: intercept checksum_manifest.txt and serve empty content
+            if (!checksumOverride.empty() && isChecksumManifest(lpFileName)) {
+                HandleState state;
+                state.isChecksumHook = true;
+                // Empty pendingData with readOffset=1 signals "serve empty content"
+                // (readOffset=1 so hookedReadFile won't try to read the actual file)
+                state.pendingData = {'\n'}; // minimal valid content (single newline)
+                state.readOffset  = 0;
+                EnterCriticalSection(&handleLock);
+                trackedHandles[h] = std::move(state);
+                LeaveCriticalSection(&handleLock);
+                return h;
+            }
+
+            if (utf8ConversionEnabled && isTextFile(lpFileName)) {
                 // Skip vanilla files — they should not be converted
                 if (!isVanillaFile(lpFileName)) {
                     EnterCriticalSection(&handleLock);
@@ -190,7 +232,9 @@ namespace FileRead {
         }
 
         // First read on this handle: load and convert the file
-        if (it->second.pendingData.empty() && it->second.readOffset == 0) {
+        // (skip for checksum hook handles — their data is already set)
+        if (!it->second.isChecksumHook && it->second.pendingData.empty() &&
+            it->second.readOffset == 0) {
             // Release lock during file I/O and conversion
             LeaveCriticalSection(&handleLock);
 
@@ -267,18 +311,162 @@ namespace FileRead {
         return origCloseHandle(hObject);
     }
 
+    // Known checksum when manifest is emptied — used as search target
+    static constexpr const char* EMPTY_MANIFEST_CHECKSUM = "cfda";
+
+    static bool isHexChar(char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+    }
+
+    // VEH-based crash protection for memory scanning
+    static thread_local jmp_buf scanJmpBuf;
+    static thread_local DWORD   scanThreadId = 0;
+
+    static LONG WINAPI scanVEH(EXCEPTION_POINTERS* ep) {
+        if (GetCurrentThreadId() == scanThreadId &&
+            ep->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
+            longjmp(scanJmpBuf, 1);
+        }
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    // Scan one memory region for "cfda" patterns and patch them.
+    // Returns number of patches applied.
+    static int scanAndPatchRegion(char* base, SIZE_T size) {
+        int patched = 0;
+
+        // Re-verify the memory is still valid before scanning
+        MEMORY_BASIC_INFORMATION mbi;
+        if (!VirtualQuery(base, &mbi, sizeof(mbi)) ||
+            mbi.State != MEM_COMMIT || mbi.Protect != PAGE_READWRITE)
+            return 0;
+
+        SIZE_T safeSize = (SIZE_T)((char*)mbi.BaseAddress + mbi.RegionSize - base);
+        if (safeSize > size)
+            safeSize = size;
+
+        // Use setjmp to recover from access violations during scan
+        if (setjmp(scanJmpBuf) != 0) {
+            // Jumped back from VEH — memory became invalid, abort this region
+            return patched;
+        }
+
+        for (SIZE_T off = 0; off + 5 <= safeSize; off++) {
+            if (base[off] != 'c')
+                continue;
+            if (memcmp(base + off, EMPTY_MANIFEST_CHECKSUM, 4) != 0)
+                continue;
+
+            // Pattern 1: hash tail + "cfda\0"
+            bool isHashChecksum = false;
+            if (base[off + 4] == '\0' && off >= 8) {
+                isHashChecksum = true;
+                for (int j = 1; j <= 8; j++) {
+                    if (!isHexChar(base[off - j])) {
+                        isHashChecksum = false;
+                        break;
+                    }
+                }
+            }
+
+            // Pattern 2: "(cfda)"
+            bool isUIDisplay = false;
+            if (off >= 1 && base[off - 1] == '(' &&
+                off + 4 < safeSize && base[off + 4] == ')') {
+                isUIDisplay = true;
+            }
+
+            if (isHashChecksum || isUIDisplay) {
+                char addrStr[32];
+                snprintf(addrStr, sizeof(addrStr), "%p", base + off);
+                BytePattern::LoggingInfo(
+                    "[checksum] Patching at " + std::string(addrStr) +
+                    (isHashChecksum ? " [hash]" : " [UI]") + "\n");
+
+                memcpy(base + off, checksumOverride.c_str(), 4);
+                patched++;
+            }
+        }
+
+        return patched;
+    }
+
+    static DWORD WINAPI checksumPatchThread(LPVOID) {
+        Sleep(10000);
+
+        BytePattern::LoggingInfo("[checksum] Patch thread started, polling for cfda...\n");
+
+        // Register VEH for crash protection during memory scanning
+        scanThreadId = GetCurrentThreadId();
+        PVOID vehHandle = AddVectoredExceptionHandler(1, scanVEH);
+
+        int totalPatched  = 0;
+        int roundsWithHit = 0;
+        int roundsNoHit   = 0;
+
+        for (int round = 0; round < 60; round++) {
+            if (round > 0)
+                Sleep(5000);
+
+            int patchedThisRound = 0;
+
+            MEMORY_BASIC_INFORMATION mbi;
+            const unsigned char*     addr = nullptr;
+
+            while (VirtualQuery(addr, &mbi, sizeof(mbi))) {
+                if (mbi.State == MEM_COMMIT && mbi.Protect == PAGE_READWRITE) {
+                    patchedThisRound += scanAndPatchRegion(
+                        reinterpret_cast<char*>(mbi.BaseAddress), mbi.RegionSize);
+                }
+
+                addr = reinterpret_cast<const unsigned char*>(mbi.BaseAddress) + mbi.RegionSize;
+                if (addr < reinterpret_cast<const unsigned char*>(mbi.BaseAddress))
+                    break;
+            }
+
+            if (patchedThisRound > 0) {
+                roundsWithHit++;
+                roundsNoHit = 0;
+                totalPatched += patchedThisRound;
+                BytePattern::LoggingInfo("[checksum] Round " + std::to_string(round) +
+                                        ": patched " + std::to_string(patchedThisRound) +
+                                        " (total " + std::to_string(totalPatched) + ")\n");
+            } else if (roundsWithHit > 0) {
+                roundsNoHit++;
+                if (roundsNoHit >= 5) {
+                    BytePattern::LoggingInfo(
+                        "[checksum] No new matches for 5 rounds, stopping.\n");
+                    break;
+                }
+            }
+        }
+
+        if (vehHandle)
+            RemoveVectoredExceptionHandler(vehHandle);
+
+        BytePattern::LoggingInfo("[checksum] Thread done. Total patched: " +
+                                std::to_string(totalPatched) + "\n");
+        return 0;
+    }
+
     void Init(const RunOptions& options) {
-        if (!options.autoUtf8Conversion)
+        checksumOverride     = options.checksumOverride;
+        utf8ConversionEnabled = options.autoUtf8Conversion;
+
+        // Install hooks if any feature needs them
+        if (!options.autoUtf8Conversion && checksumOverride.empty())
             return;
 
         InitializeCriticalSection(&handleLock);
 
         // Cache game directory prefix for vanilla file detection
-        wchar_t exePath[MAX_PATH];
-        if (GetModuleFileNameW(nullptr, exePath, MAX_PATH)) {
-            wchar_t* lastSlash = wcsrchr(exePath, L'\\');
-            if (lastSlash) {
-                gameDirPrefix.assign(exePath, lastSlash + 1);
+        if (options.autoUtf8Conversion) {
+            wchar_t exePath[MAX_PATH];
+            if (GetModuleFileNameW(nullptr, exePath, MAX_PATH)) {
+                wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+                if (lastSlash) {
+                    gameDirPrefix.assign(exePath, lastSlash + 1);
+                }
             }
         }
 
@@ -292,6 +480,36 @@ namespace FileRead {
 
         origCloseHandle = (decltype(origCloseHandle))IATHook::Hook(
             exeModule, "kernel32.dll", "CloseHandle", (void*)hookedCloseHandle);
+
+        // Launch background thread to patch checksum in memory after game computes it
+        if (!checksumOverride.empty() && checksumOverride.size() == 4) {
+            CreateThread(nullptr, 0, checksumPatchThread, nullptr, 0, nullptr);
+
+            // Patch achievement checksum validation: TEST EAX,EAX -> XOR EAX,EAX
+            // This makes the checksum comparison always return "match",
+            // enabling achievements with modded checksums.
+            // Pattern: 48 8B 12 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 85 C0 0F 94 C3
+            BytePattern::temp_instance()
+                .find_pattern("48 8B 12 48 8D 0D ? ? ? ? E8 ? ? ? ? 85 C0 0F 94 C3");
+
+            if (BytePattern::temp_instance().count() > 0) {
+                for (size_t i = 0; i < BytePattern::temp_instance().count(); i++) {
+                    auto addr = BytePattern::temp_instance().get(i).address();
+                    // 85 C0 is at offset +15 from pattern start
+                    void* patchAddr = reinterpret_cast<void*>(addr + 15);
+                    DWORD oldProtect;
+                    if (VirtualProtect(patchAddr, 2, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+                        // 85 C0 (TEST EAX,EAX) -> 31 C0 (XOR EAX,EAX)
+                        *(unsigned char*)patchAddr = 0x31;
+                        VirtualProtect(patchAddr, 2, oldProtect, &oldProtect);
+                        BytePattern::LoggingInfo("[checksum] Achievement patch applied at match #" +
+                                                std::to_string(i) + "\n");
+                    }
+                }
+            } else {
+                BytePattern::LoggingInfo("[checksum] Achievement pattern not found!\n");
+            }
+        }
     }
 
 } // namespace FileRead

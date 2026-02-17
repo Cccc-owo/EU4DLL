@@ -101,12 +101,13 @@ struct ParadoxTextObject {
 };
 
 struct RunOptions {
-    bool test;
-    bool reversingWordsBattleOfArea;
-    bool autoUtf8Conversion;
-    int  separateCharacterCodePoint;
-    int  lineBreakBufferWidth;
-    bool steamRichPresence;
+    bool        test;
+    bool        reversingWordsBattleOfArea;
+    bool        autoUtf8Conversion;
+    int         separateCharacterCodePoint;
+    int         lineBreakBufferWidth;
+    bool        steamRichPresence;
+    std::string checksumOverride;
 };
 
 namespace Version {

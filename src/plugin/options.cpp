@@ -37,5 +37,13 @@ namespace Ini {
         options->lineBreakBufferWidth = readInt(ini, L"LINE_BREAK_BUFFER_WIDTH", 5);
         options->autoUtf8Conversion   = readBool(ini, L"AUTO_UTF8_CONVERSION", true);
         options->steamRichPresence    = readBool(ini, L"STEAM_RICH_PRESENCE", true);
+
+        // Checksum override: empty string means disabled
+        std::wstring checksumW = readString(ini, L"CHECKSUM_OVERRIDE", L"");
+        std::string  checksumA;
+        for (wchar_t wc : checksumW)
+            if (wc)
+                checksumA += static_cast<char>(wc);
+        options->checksumOverride = checksumA;
     }
 } // namespace Ini
