@@ -108,6 +108,7 @@ struct RunOptions {
     int         lineBreakBufferWidth;
     bool        steamRichPresence;
     std::string checksumOverride;
+    bool        achievementUnlock;
 };
 
 namespace Version {

@@ -45,5 +45,7 @@ namespace Ini {
             if (wc)
                 checksumA += static_cast<char>(wc);
         options->checksumOverride = checksumA;
+
+        options->achievementUnlock = readBool(ini, L"ACHIEVEMENT_UNLOCK", false);
     }
 } // namespace Ini

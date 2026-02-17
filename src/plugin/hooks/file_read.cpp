@@ -450,41 +450,45 @@ namespace FileRead {
     }
 
     void Init(const RunOptions& options) {
-        checksumOverride     = options.checksumOverride;
+        checksumOverride      = options.checksumOverride;
         utf8ConversionEnabled = options.autoUtf8Conversion;
 
-        // Install hooks if any feature needs them
-        if (!options.autoUtf8Conversion && checksumOverride.empty())
-            return;
+        bool needIATHooks = options.autoUtf8Conversion || !checksumOverride.empty();
 
-        InitializeCriticalSection(&handleLock);
+        // Install IAT hooks if UTF-8 conversion or checksum override needs them
+        if (needIATHooks) {
+            InitializeCriticalSection(&handleLock);
 
-        // Cache game directory prefix for vanilla file detection
-        if (options.autoUtf8Conversion) {
-            wchar_t exePath[MAX_PATH];
-            if (GetModuleFileNameW(nullptr, exePath, MAX_PATH)) {
-                wchar_t* lastSlash = wcsrchr(exePath, L'\\');
-                if (lastSlash) {
-                    gameDirPrefix.assign(exePath, lastSlash + 1);
+            // Cache game directory prefix for vanilla file detection
+            if (options.autoUtf8Conversion) {
+                wchar_t exePath[MAX_PATH];
+                if (GetModuleFileNameW(nullptr, exePath, MAX_PATH)) {
+                    wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+                    if (lastSlash) {
+                        gameDirPrefix.assign(exePath, lastSlash + 1);
+                    }
                 }
+            }
+
+            HMODULE exeModule = GetModuleHandle(nullptr);
+
+            origCreateFileW = (decltype(origCreateFileW))IATHook::Hook(
+                exeModule, "kernel32.dll", "CreateFileW", (void*)hookedCreateFileW);
+
+            origReadFile = (decltype(origReadFile))IATHook::Hook(
+                exeModule, "kernel32.dll", "ReadFile", (void*)hookedReadFile);
+
+            origCloseHandle = (decltype(origCloseHandle))IATHook::Hook(
+                exeModule, "kernel32.dll", "CloseHandle", (void*)hookedCloseHandle);
+
+            // Launch background thread to patch checksum in memory after game computes it
+            if (!checksumOverride.empty() && checksumOverride.size() == 4) {
+                CreateThread(nullptr, 0, checksumPatchThread, nullptr, 0, nullptr);
             }
         }
 
-        HMODULE exeModule = GetModuleHandle(nullptr);
-
-        origCreateFileW = (decltype(origCreateFileW))IATHook::Hook(
-            exeModule, "kernel32.dll", "CreateFileW", (void*)hookedCreateFileW);
-
-        origReadFile = (decltype(origReadFile))IATHook::Hook(exeModule, "kernel32.dll", "ReadFile",
-                                                             (void*)hookedReadFile);
-
-        origCloseHandle = (decltype(origCloseHandle))IATHook::Hook(
-            exeModule, "kernel32.dll", "CloseHandle", (void*)hookedCloseHandle);
-
-        // Launch background thread to patch checksum in memory after game computes it
-        if (!checksumOverride.empty() && checksumOverride.size() == 4) {
-            CreateThread(nullptr, 0, checksumPatchThread, nullptr, 0, nullptr);
-
+        // Achievement unlock: patch checksum validation independently
+        if (options.achievementUnlock) {
             // Patch achievement checksum validation: TEST EAX,EAX -> XOR EAX,EAX
             // This makes the checksum comparison always return "match",
             // enabling achievements with modded checksums.
@@ -502,12 +506,12 @@ namespace FileRead {
                         // 85 C0 (TEST EAX,EAX) -> 31 C0 (XOR EAX,EAX)
                         *(unsigned char*)patchAddr = 0x31;
                         VirtualProtect(patchAddr, 2, oldProtect, &oldProtect);
-                        BytePattern::LoggingInfo("[checksum] Achievement patch applied at match #" +
+                        BytePattern::LoggingInfo("[achievement] Patch applied at match #" +
                                                 std::to_string(i) + "\n");
                     }
                 }
             } else {
-                BytePattern::LoggingInfo("[checksum] Achievement pattern not found!\n");
+                BytePattern::LoggingInfo("[achievement] Pattern not found!\n");
             }
         }
     }
