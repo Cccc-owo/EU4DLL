@@ -82,6 +82,16 @@ namespace SteamRichPresence {
 
             logMsg("Exception 0x%08lX at %p, aborting hook\n", code,
                    ep->ExceptionRecord->ExceptionAddress);
+            if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
+                logMsg("  Access type: %s, target address: %p\n",
+                       ep->ExceptionRecord->ExceptionInformation[0] == 0 ? "READ"
+                       : ep->ExceptionRecord->ExceptionInformation[0] == 1 ? "WRITE"
+                                                                           : "EXECUTE",
+                       (void*)ep->ExceptionRecord->ExceptionInformation[1]);
+            }
+            logMsg("  RIP=%p RSP=%p RCX=%p RAX=%p\n",
+                   (void*)ep->ContextRecord->Rip, (void*)ep->ContextRecord->Rsp,
+                   (void*)ep->ContextRecord->Rcx, (void*)ep->ContextRecord->Rax);
             logClose();
             longjmp(initJmpBuf, 1);
             return EXCEPTION_CONTINUE_SEARCH; // unreachable
@@ -118,6 +128,15 @@ namespace SteamRichPresence {
                     return 0;
                 }
                 logMsg("steam_api64.dll at %p\n", api);
+
+                // Log DLL file size for identifying crack vs original
+                {
+                    char dllPath[MAX_PATH] = {};
+                    if (GetModuleFileNameA(api, dllPath, MAX_PATH))
+                        logMsg("steam_api64.dll path: %s\n", dllPath);
+                    HMODULE steamClient = GetModuleHandleA("steamclient64.dll");
+                    logMsg("steamclient64.dll: %p\n", steamClient);
+                }
 
                 // Wait for Steam interfaces to initialize
                 logMsg("Sleeping 3s...\n");
@@ -170,11 +189,29 @@ namespace SteamRichPresence {
             auto fn = reinterpret_cast<GetterFn>(GetProcAddress(steamApi, ver));
             if (!fn)
                 continue;
-            logMsg("  Calling %s at %p...\n", ver, fn);
+            logMsg("  Found %s at %p\n", ver, fn);
+            logBytes("  Entry bytes", reinterpret_cast<const void*>(fn), 16);
+
+            // Safety check: skip if function points to null/invalid code
+            auto fnBytes = reinterpret_cast<const uint8_t*>(fn);
+            if (fnBytes[0] == 0x00 && fnBytes[1] == 0x00) {
+                logMsg("  Skipping %s: entry bytes are null (stub/dummy export)\n", ver);
+                continue;
+            }
+
+            logMsg("  Calling %s...\n", ver);
             void* iface = fn();
             logMsg("  %s() -> %p\n", ver, iface);
-            if (iface)
+            if (iface) {
+                // Validate the returned pointer looks like a valid COM object (has vtable)
+                void** vtablePtr = *reinterpret_cast<void***>(iface);
+                logMsg("  Interface vtable ptr: %p\n", vtablePtr);
+                if (!vtablePtr) {
+                    logMsg("  Skipping: vtable pointer is null\n");
+                    continue;
+                }
                 return iface;
+            }
         }
         return nullptr;
     }
@@ -319,8 +356,12 @@ namespace SteamRichPresence {
                 int32_t disp;
                 memcpy(&disp, &fn[3], 4);
                 auto ptr = const_cast<uint8_t*>(fn) + 7 + disp;
-                logMsg("  resolveThunk: mov+jmp pattern, disp=%d, deref %p\n", disp, ptr);
-                return *reinterpret_cast<void**>(ptr);
+                logMsg("  resolveThunk: mov+jmp pattern, disp=%d, ptr=%p\n", disp, ptr);
+                void* target = *reinterpret_cast<void**>(ptr);
+                logMsg("  resolveThunk: dereferenced -> %p\n", target);
+                if (!target)
+                    logMsg("  resolveThunk: WARNING target is null\n");
+                return target;
             }
         }
 
@@ -329,8 +370,12 @@ namespace SteamRichPresence {
             int32_t disp;
             memcpy(&disp, &fn[off + 2], 4);
             auto ptr = const_cast<uint8_t*>(fn) + off + 6 + disp;
-            logMsg("  resolveThunk: jmp [rip+d] pattern, disp=%d, deref %p\n", disp, ptr);
-            return *reinterpret_cast<void**>(ptr);
+            logMsg("  resolveThunk: jmp [rip+d] pattern, disp=%d, ptr=%p\n", disp, ptr);
+            void* target = *reinterpret_cast<void**>(ptr);
+            logMsg("  resolveThunk: dereferenced -> %p\n", target);
+            if (!target)
+                logMsg("  resolveThunk: WARNING target is null\n");
+            return target;
         }
 
         logMsg("  resolveThunk: no pattern matched\n");

@@ -11,22 +11,37 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ulReasonForCall, LPVOID lpReserved)
         RunOptions options = {};
 
         // INI settings
+        BytePattern::LoggingInfo("[init] Loading INI options...\n");
         Ini::GetOptionsFromIni(&options);
+        BytePattern::LoggingInfo("[init] Options: autoUtf8=" +
+                                std::to_string(options.autoUtf8Conversion) +
+                                " steamRP=" + std::to_string(options.steamRichPresence) + "\n");
 
         // Version check (v1.37 only)
+        BytePattern::LoggingInfo("[init] Validating game version...\n");
         if (Validator::ValidateVersion()) {
+            BytePattern::LoggingInfo("[init] Version OK\n");
 
             // UTF-8 auto conversion (IAT hook)
+            BytePattern::LoggingInfo("[init] FileRead::Init...\n");
             FileRead::Init(options);
+            BytePattern::LoggingInfo("[init] FileRead::Init done\n");
 
             // Steam rich presence text fix (vtable hook)
-            if (options.steamRichPresence)
+            if (options.steamRichPresence) {
+                BytePattern::LoggingInfo("[init] SteamRichPresence::Init...\n");
                 SteamRichPresence::Init();
+                BytePattern::LoggingInfo("[init] SteamRichPresence::Init done (thread launched)\n");
+            } else {
+                BytePattern::LoggingInfo("[init] SteamRichPresence skipped (disabled)\n");
+            }
 
             // Font loading
+            BytePattern::LoggingInfo("[init] Font::Init...\n");
             e.merge(Font::Init(options));
 
             // UI text display
+            BytePattern::LoggingInfo("[init] MainText::Init...\n");
             e.merge(MainText::Init(options));
 
             // Tooltip and button display
@@ -71,8 +86,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ulReasonForCall, LPVOID lpReserved)
             // BitmapFont adjustment, scroll adjustment
             e.merge(CBitmapFont::Init(options));
 
+            BytePattern::LoggingInfo("[init] All hooks initialized, validating...\n");
             Validator::Validate(e, options);
+        } else {
+            BytePattern::LoggingInfo("[init] Version check FAILED\n");
         }
+
+        BytePattern::LoggingInfo("[init] DLL_PROCESS_ATTACH complete\n");
     } else if (ulReasonForCall == DLL_PROCESS_DETACH) {
         BytePattern::ShutdownLog();
     }
