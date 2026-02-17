@@ -8,6 +8,8 @@ This dll makes it possible to display double-byte characters on Europa Universal
 
 - **Auto UTF-8 conversion**: Localization files in UTF-8 are automatically converted to the game's internal encoding at load time. No need for pre-processing tools — just drop UTF-8 `.yml` files in and they work alongside traditional pre-encoded files.
 - **Steam Rich Presence fix**: CJK text in Steam Rich Presence (e.g. country name, ruler title shown on your Steam profile) is properly displayed instead of garbled symbols.
+- **Checksum override**: Force the game to display a specific checksum (e.g. `491d` for vanilla 1.37.5), allowing modded games to appear as unmodified for multiplayer compatibility.
+- **Achievement unlock**: Bypass the game's checksum validation so achievements can be earned even with mods enabled.
 - **Linux support**: Works under Proton/Wine via `version.dll` override.
 
 ## Notice
@@ -60,6 +62,22 @@ Change the word ordering:
 - Battle of / xxx -> xxx / Battle of
 - Siege of / xxx -> xxx / Siege of
 - Occupation of xxx -> xxx / Occupation of
+
+#### AUTO_UTF8_CONVERSION
+
+When set to `yes` (default), UTF-8 encoded `.yml` and `.txt` files from mods are automatically converted to the game's internal escape encoding at load time. Vanilla game files are not affected.
+
+#### STEAM_RICH_PRESENCE
+
+When set to `yes` (default), fixes garbled CJK text in Steam Rich Presence display (country name, ruler title, etc. shown on your Steam profile).
+
+#### CHECKSUM_OVERRIDE
+
+Set to a 4-character hex string (e.g. `491d`) to force the game to display that checksum instead of the computed one. This works by intercepting `checksum_manifest.txt` and patching the checksum string in memory. Leave empty to disable.
+
+#### ACHIEVEMENT_UNLOCK
+
+When set to `yes`, patches the game's internal checksum validation so that achievements can be earned regardless of whether mods are active. Default is `no`.
 
 ### Name order
 

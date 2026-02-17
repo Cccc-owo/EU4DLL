@@ -6,6 +6,8 @@
 
 - **自动 UTF-8 转换**：本地化文件无需预处理，UTF-8 编码的 `.yml` 文件在加载时自动转换为游戏内部编码，同时兼容传统的预转码文件。
 - **Steam 状态修复**：Steam 好友列表中显示的富状态文本（如国家名、统治者头衔）不再乱码，正确显示 CJK 字符。
+- **校验码覆盖**：强制游戏显示指定的校验码（如 `491d` 对应原版 1.37.5），使带 Mod 的游戏在多人游戏中显示为未修改状态。
+- **成就解锁**：绕过游戏的校验码验证，使开启 Mod 时仍可获取成就。
 - **Linux 支持**：通过 Proton/Wine 的 `version.dll` 覆盖方式运行。
 
 ## 注意事项
@@ -58,6 +60,22 @@
 - Battle of / xxx -> xxx / Battle of
 - Siege of / xxx -> xxx / Siege of
 - Occupation of xxx -> xxx / Occupation of
+
+#### AUTO_UTF8_CONVERSION
+
+设为 `yes`（默认）时，Mod 中 UTF-8 编码的 `.yml` 和 `.txt` 文件在加载时自动转换为游戏内部的转义编码。原版游戏文件不受影响。
+
+#### STEAM_RICH_PRESENCE
+
+设为 `yes`（默认）时，修复 Steam 个人资料中富状态显示的 CJK 乱码问题（国家名、统治者头衔等）。
+
+#### CHECKSUM_OVERRIDE
+
+设为 4 位十六进制字符串（如 `491d`）可强制游戏显示该校验码，而非实际计算值。原理是拦截 `checksum_manifest.txt` 并在内存中替换校验码字符串。留空则禁用。
+
+#### ACHIEVEMENT_UNLOCK
+
+设为 `yes` 时，修补游戏内部的校验码验证逻辑，使开启 Mod 时仍可获取成就。默认为 `no`。
 
 ### 姓名顺序
 
