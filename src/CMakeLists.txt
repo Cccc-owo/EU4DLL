@@ -19,6 +19,8 @@ add_custom_target(package
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:version> ${PACKAGE_DIR}/
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:plugin64> ${PACKAGE_DIR}/plugins/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/resource/plugin.ini ${PACKAGE_DIR}/plugins/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/../README.md ${PACKAGE_DIR}/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/../README_zh-CN.md ${PACKAGE_DIR}/
     DEPENDS version plugin64
     COMMENT "Packaging into ${PACKAGE_DIR}"
 )

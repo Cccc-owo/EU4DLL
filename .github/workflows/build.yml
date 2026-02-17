@@ -3,6 +3,7 @@ name: Build
 on:
   push:
     branches: [master, develop]
+    tags: ['v*']
   pull_request:
     branches: [master, develop]
 
@@ -42,7 +43,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
 
@@ -58,13 +59,12 @@ jobs:
           path: artifact/
 
       - name: Package for release
-        run: cd artifact && zip -r ../steam_EU4_fixdll_enhanced_build_${{ github.run_number }}.zip .
+        run: cd artifact && zip -r ../EU4dll-${{ github.ref_name }}.zip .
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
-          name: Release ${{ github.run_number }}
-          body: |
-            Build ${{ github.run_number }} from commit ${{ github.sha }}
-          files: steam_EU4_fixdll_enhanced_build_${{ github.run_number }}.zip
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true
+          files: EU4dll-${{ github.ref_name }}.zip
