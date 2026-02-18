@@ -16,7 +16,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ulReasonForCall, LPVOID lpReserved)
         BytePattern::LoggingInfo("[init] Options: autoUtf8=" +
                                 std::to_string(options.autoUtf8Conversion) +
                                 " steamRP=" + std::to_string(options.steamRichPresence) +
-                                " checksumOverride=" + (options.checksumOverride.empty() ? "off" : options.checksumOverride) +
                                 " achievementUnlock=" + std::to_string(options.achievementUnlock) + "\n");
 
         // Version check (v1.37 only)

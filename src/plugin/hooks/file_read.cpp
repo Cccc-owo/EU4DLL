@@ -1,8 +1,8 @@
 #include "../byte_pattern.h"
 #include "../escape_tool.h"
 #include "../iat_hook.h"
+#include "../injector.h"
 #include "../plugin_64.h"
-#include <csetjmp>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -20,9 +20,6 @@ namespace FileRead {
 
     // Cached game directory prefix for vanilla file detection
     static std::wstring gameDirPrefix;
-
-    // Checksum override config (empty = disabled)
-    static std::string checksumOverride;
 
     // Whether UTF-8 auto conversion is enabled
     static bool utf8ConversionEnabled = false;
@@ -75,24 +72,6 @@ namespace FileRead {
         if (pathLen < prefixLen)
             return false;
         return _wcsnicmp(path, gameDirPrefix.c_str(), prefixLen) == 0;
-    }
-
-    static bool isChecksumManifest(const wchar_t* path) {
-        if (!path)
-            return false;
-        // Match filename "checksum_manifest.txt" at end of path
-        const wchar_t* name   = L"checksum_manifest.txt";
-        size_t         nameLen = wcslen(name);
-        size_t         pathLen = wcslen(path);
-        if (pathLen < nameLen)
-            return false;
-        const wchar_t* tail = path + pathLen - nameLen;
-        if (_wcsicmp(tail, name) != 0)
-            return false;
-        // Ensure it's preceded by a path separator or is the entire path
-        if (tail != path && tail[-1] != L'\\' && tail[-1] != L'/')
-            return false;
-        return true;
     }
 
     static bool needsUtf8Conversion(const char* buf, size_t len, bool isTxtFile) {
@@ -307,18 +286,6 @@ namespace FileRead {
 
             bool txtFlag = false;
 
-            // Checksum override: intercept checksum_manifest.txt and serve empty content
-            if (!checksumOverride.empty() && isChecksumManifest(lpFileName)) {
-                HandleState state;
-                state.converted   = true;
-                state.pendingData = {'\n'}; // minimal valid content (single newline)
-                state.readOffset  = 0;
-                EnterCriticalSection(&handleLock);
-                trackedHandles[h] = std::move(state);
-                LeaveCriticalSection(&handleLock);
-                return h;
-            }
-
             if (utf8ConversionEnabled && isTextFile(lpFileName, &txtFlag)) {
                 // Skip vanilla files — they should not be converted
                 if (!isVanillaFile(lpFileName)) {
@@ -436,162 +403,24 @@ namespace FileRead {
         return origGetFileSize(hFile, lpFileSizeHigh);
     }
 
-    // Known checksum when manifest is emptied — used as search target
-    static constexpr const char* EMPTY_MANIFEST_CHECKSUM = "cfda";
-
-    static bool isHexChar(char c) {
-        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-    }
-
-    // VEH-based crash protection for memory scanning
-    static thread_local jmp_buf scanJmpBuf;
-    static thread_local DWORD   scanThreadId = 0;
-
-    static LONG WINAPI scanVEH(EXCEPTION_POINTERS* ep) {
-        if (GetCurrentThreadId() == scanThreadId &&
-            ep->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
-            longjmp(scanJmpBuf, 1);
-        }
-        return EXCEPTION_CONTINUE_SEARCH;
-    }
-
-    // Scan one memory region for "cfda" patterns and patch them.
-    // Returns number of patches applied.
-    static int scanAndPatchRegion(char* base, SIZE_T size) {
-        int patched = 0;
-
-        // Re-verify the memory is still valid before scanning
-        MEMORY_BASIC_INFORMATION mbi;
-        if (!VirtualQuery(base, &mbi, sizeof(mbi)) ||
-            mbi.State != MEM_COMMIT || mbi.Protect != PAGE_READWRITE)
-            return 0;
-
-        SIZE_T safeSize = (SIZE_T)((char*)mbi.BaseAddress + mbi.RegionSize - base);
-        if (safeSize > size)
-            safeSize = size;
-
-        // Use setjmp to recover from access violations during scan
-        if (setjmp(scanJmpBuf) != 0) {
-            // Jumped back from VEH — memory became invalid, abort this region
-            return patched;
-        }
-
-        for (SIZE_T off = 0; off + 5 <= safeSize; off++) {
-            if (base[off] != 'c')
-                continue;
-            if (memcmp(base + off, EMPTY_MANIFEST_CHECKSUM, 4) != 0)
-                continue;
-
-            // Pattern 1: hash tail + "cfda\0"
-            bool isHashChecksum = false;
-            if (base[off + 4] == '\0' && off >= 8) {
-                isHashChecksum = true;
-                for (int j = 1; j <= 8; j++) {
-                    if (!isHexChar(base[off - j])) {
-                        isHashChecksum = false;
-                        break;
-                    }
-                }
-            }
-
-            // Pattern 2: "(cfda)"
-            bool isUIDisplay = false;
-            if (off >= 1 && base[off - 1] == '(' &&
-                off + 4 < safeSize && base[off + 4] == ')') {
-                isUIDisplay = true;
-            }
-
-            if (isHashChecksum || isUIDisplay) {
-                char addrStr[32];
-                snprintf(addrStr, sizeof(addrStr), "%p", base + off);
-                BytePattern::LoggingInfo(
-                    "[checksum] Patching at " + std::string(addrStr) +
-                    (isHashChecksum ? " [hash]" : " [UI]") + "\n");
-
-                memcpy(base + off, checksumOverride.c_str(), 4);
-                patched++;
-            }
-        }
-
-        return patched;
-    }
-
-    static DWORD WINAPI checksumPatchThread(LPVOID) {
-        Sleep(10000);
-
-        BytePattern::LoggingInfo("[checksum] Patch thread started, polling for cfda...\n");
-
-        // Register VEH for crash protection during memory scanning
-        scanThreadId = GetCurrentThreadId();
-        PVOID vehHandle = AddVectoredExceptionHandler(1, scanVEH);
-
-        int totalPatched  = 0;
-        int roundsWithHit = 0;
-        int roundsNoHit   = 0;
-
-        for (int round = 0; round < 60; round++) {
-            if (round > 0)
-                Sleep(5000);
-
-            int patchedThisRound = 0;
-
-            MEMORY_BASIC_INFORMATION mbi;
-            const unsigned char*     addr = nullptr;
-
-            while (VirtualQuery(addr, &mbi, sizeof(mbi))) {
-                if (mbi.State == MEM_COMMIT && mbi.Protect == PAGE_READWRITE) {
-                    patchedThisRound += scanAndPatchRegion(
-                        reinterpret_cast<char*>(mbi.BaseAddress), mbi.RegionSize);
-                }
-
-                addr = reinterpret_cast<const unsigned char*>(mbi.BaseAddress) + mbi.RegionSize;
-                if (addr < reinterpret_cast<const unsigned char*>(mbi.BaseAddress))
-                    break;
-            }
-
-            if (patchedThisRound > 0) {
-                roundsWithHit++;
-                roundsNoHit = 0;
-                totalPatched += patchedThisRound;
-                BytePattern::LoggingInfo("[checksum] Round " + std::to_string(round) +
-                                        ": patched " + std::to_string(patchedThisRound) +
-                                        " (total " + std::to_string(totalPatched) + ")\n");
-            } else if (roundsWithHit > 0) {
-                roundsNoHit++;
-                if (roundsNoHit >= 5) {
-                    BytePattern::LoggingInfo(
-                        "[checksum] No new matches for 5 rounds, stopping.\n");
-                    break;
-                }
-            }
-        }
-
-        if (vehHandle)
-            RemoveVectoredExceptionHandler(vehHandle);
-
-        BytePattern::LoggingInfo("[checksum] Thread done. Total patched: " +
-                                std::to_string(totalPatched) + "\n");
-        return 0;
-    }
+    // Checksum spoofing: the game compares a computed checksum against a hardcoded
+    // vanilla value at 2 call sites. We patch the comparison result to always
+    // indicate "equal", bypassing mod detection for achievements and multiplayer.
+    static const char* vanillaChecksum = nullptr;
 
     void Init(const RunOptions& options) {
-        checksumOverride      = options.checksumOverride;
         utf8ConversionEnabled = options.autoUtf8Conversion;
 
-        bool needIATHooks = options.autoUtf8Conversion || !checksumOverride.empty();
-
-        // Install IAT hooks if UTF-8 conversion or checksum override needs them
-        if (needIATHooks) {
+        // Install IAT hooks for UTF-8 auto conversion
+        if (options.autoUtf8Conversion) {
             InitializeCriticalSection(&handleLock);
 
             // Cache game directory prefix for vanilla file detection
-            if (options.autoUtf8Conversion) {
-                wchar_t exePath[MAX_PATH];
-                if (GetModuleFileNameW(nullptr, exePath, MAX_PATH)) {
-                    wchar_t* lastSlash = wcsrchr(exePath, L'\\');
-                    if (lastSlash) {
-                        gameDirPrefix.assign(exePath, lastSlash + 1);
-                    }
+            wchar_t exePath[MAX_PATH];
+            if (GetModuleFileNameW(nullptr, exePath, MAX_PATH)) {
+                wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+                if (lastSlash) {
+                    gameDirPrefix.assign(exePath, lastSlash + 1);
                 }
             }
 
@@ -614,38 +443,42 @@ namespace FileRead {
 
             origGetFileSize = (GetFileSizePtr)IATHook::Hook(
                 exeModule, "kernel32.dll", "GetFileSize", (void*)hookedGetFileSize);
-
-            // Launch background thread to patch checksum in memory after game computes it
-            if (!checksumOverride.empty() && checksumOverride.size() == 4) {
-                CreateThread(nullptr, 0, checksumPatchThread, nullptr, 0, nullptr);
-            }
         }
 
-        // Achievement unlock: patch checksum validation independently
+        // Checksum spoof: patch "TEST EAX,EAX / SETZ BL" after the compare CALL
+        // to "MOV BL,1 / NOP / NOP / NOP", forcing the result to always be "equal".
         if (options.achievementUnlock) {
-            // Patch achievement checksum validation: TEST EAX,EAX -> XOR EAX,EAX
-            // This makes the checksum comparison always return "match",
-            // enabling achievements with modded checksums.
-            // Pattern: 48 8B 12 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 85 C0 0F 94 C3
             BytePattern::temp_instance()
                 .find_pattern("48 8B 12 48 8D 0D ? ? ? ? E8 ? ? ? ? 85 C0 0F 94 C3");
 
             if (BytePattern::temp_instance().count() > 0) {
+                uintptr_t firstMatch = BytePattern::temp_instance().get_first().address();
+
+                // Resolve vanilla checksum address for logging
+                vanillaChecksum = reinterpret_cast<const char*>(
+                    Injector::GetBranchDestination(firstMatch + 3, true));
+
+                size_t patched = 0;
                 for (size_t i = 0; i < BytePattern::temp_instance().count(); i++) {
-                    auto addr = BytePattern::temp_instance().get(i).address();
-                    // 85 C0 is at offset +15 from pattern start
-                    void* patchAddr = reinterpret_cast<void*>(addr + 15);
-                    DWORD oldProtect;
-                    if (VirtualProtect(patchAddr, 2, PAGE_EXECUTE_READWRITE, &oldProtect)) {
-                        // 85 C0 (TEST EAX,EAX) -> 31 C0 (XOR EAX,EAX)
-                        *(unsigned char*)patchAddr = 0x31;
-                        VirtualProtect(patchAddr, 2, oldProtect, &oldProtect);
-                        BytePattern::LoggingInfo("[achievement] Patch applied at match #" +
-                                                std::to_string(i) + "\n");
-                    }
+                    uintptr_t addr = BytePattern::temp_instance().get(i).address();
+                    // Offset +15: "85 C0 0F 94 C3" = TEST EAX,EAX / SETZ BL (5 bytes)
+                    // Replace with: "B3 01 90 90 90" = MOV BL,1 / NOP / NOP / NOP
+                    uintptr_t patchAddr = addr + 15;
+                    Injector::WriteMemory<uint8_t>(patchAddr,     0xB3, true); // MOV BL, imm8
+                    Injector::WriteMemory<uint8_t>(patchAddr + 1, 0x01, true); // 1
+                    Injector::WriteMemory<uint8_t>(patchAddr + 2, 0x90, true); // NOP
+                    Injector::WriteMemory<uint8_t>(patchAddr + 3, 0x90, true); // NOP
+                    Injector::WriteMemory<uint8_t>(patchAddr + 4, 0x90, true); // NOP
+                    patched++;
                 }
+
+                BytePattern::LoggingInfo(
+                    "[checksum] Patched " + std::to_string(patched) +
+                    " compare sites" +
+                    (vanillaChecksum ? ", vanilla checksum: " + std::string(vanillaChecksum) : "") +
+                    "\n");
             } else {
-                BytePattern::LoggingInfo("[achievement] Pattern not found!\n");
+                BytePattern::LoggingInfo("[checksum] Pattern not found!\n");
             }
         }
     }
