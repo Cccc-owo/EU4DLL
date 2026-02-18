@@ -1,18 +1,27 @@
 // Steam Rich Presence UTF-8 conversion hook
 //
-// EU4 uses an internal escape encoding (bytes 0x10-0x13 as markers) for CJK text.
-// When the game calls ISteamFriends::SetRichPresence(), the value contains these
-// escape markers instead of proper UTF-8, causing garbled text in Steam's UI.
+// This DLL makes EU4 compatible with CJK text by intercepting file reads and
+// converting UTF-8 content into an internal escape encoding (bytes 0x10-0x13 as
+// markers, see escape_tool.h). The game processes these escape sequences natively
+// without modification. However, when the game calls ISteamFriends::SetRichPresence(),
+// the value still contains these escape markers, causing garbled text in Steam's UI.
 //
 // This hook intercepts SetRichPresence via the ISteamFriends vtable, converts the
-// escape-encoded text to UTF-8 on the fly, then forwards to the original function.
+// escape-encoded text back to proper UTF-8, then forwards to the original function.
 //
-// The vtable index for SetRichPresence is discovered dynamically by parsing the
-// machine code of the flat API export SteamAPI_ISteamFriends_SetRichPresence:
-//   - Wine/Proton + original Steam SDK: the export is a vtable dispatch stub
+// ISteamFriends resolution (multi-level fallback):
+//   1. Getter exports: SteamAPI_SteamFriends_v017/v016/v015, SteamFriends
+//      - Direct call if getter has real code.
+//      - If getter is a thunk with null target, poll until resolved or timeout.
+//   2. SteamInternal_FindOrCreateUserInterface(HSteamUser, "SteamFriendsXXX")
+//      - Low-level API that bypasses getter thunks entirely.
+//      - Works with crack proxy DLLs whose getter thunks stay null.
+//
+// Vtable index discovery (from SteamAPI_ISteamFriends_SetRichPresence):
+//   - Original Steam SDK: the export is a vtable dispatch stub
 //     (mov rax,[rcx]; jmp [rax+offset]) — the offset directly gives the index.
-//   - Crack DLLs: the export is a thunk that forwards to the original DLL's stub.
-//     We follow the thunk and parse the target as a vtable dispatch.
+//   - Crack proxy DLLs: the export is a thunk forwarding to the original DLL's
+//     dispatch stub. We follow the thunk and parse the target.
 
 #include "../escape_tool.h"
 #include <csetjmp>
@@ -24,24 +33,32 @@
 
 namespace SteamRichPresence {
 
-    // ---- Forward declarations ----
+    // ---- Logging (forward declarations) ----
 
     static void logOpen();
     static void logClose();
     static void logMsg(const char* fmt, ...);
     static void logBytes(const char* label, const void* data, int len);
 
+    // ---- Text conversion ----
+
     static bool        hasEscapedChars(const char* text);
     static std::string convertToUtf8(const char* text);
+
+    // ---- Hook callback ----
 
     typedef bool (*SetRichPresenceFn)(void* self, const char* pchKey, const char* pchValue);
     static SetRichPresenceFn origSetRichPresence = nullptr;
     static bool hookedSetRichPresence(void* self, const char* pchKey, const char* pchValue);
 
+    // ---- x86-64 instruction parsing ----
+
     static int   parseVtableDispatch(const uint8_t* fn);
     static void* resolveThunkTarget(const uint8_t* fn);
 
-    static void* resolveSteamFriends(HMODULE steamApi);
+    // ---- Interface resolution and vtable hooking ----
+
+    static void* resolveSteamFriends(HMODULE steamApi, bool steamClientLoaded);
     static int   findVtableIndex(HMODULE steamApi, void* steamFriends);
     static bool  hookVtable(void* steamFriends, int index);
 
@@ -129,13 +146,15 @@ namespace SteamRichPresence {
                 }
                 logMsg("steam_api64.dll at %p\n", api);
 
-                // Log DLL file size for identifying crack vs original
+                // Log DLL path and check if Steam client is loaded
+                bool steamClientLoaded = false;
                 {
                     char dllPath[MAX_PATH] = {};
                     if (GetModuleFileNameA(api, dllPath, MAX_PATH))
                         logMsg("steam_api64.dll path: %s\n", dllPath);
                     HMODULE steamClient = GetModuleHandleA("steamclient64.dll");
                     logMsg("steamclient64.dll: %p\n", steamClient);
+                    steamClientLoaded = (steamClient != nullptr);
                 }
 
                 // Wait for Steam interfaces to initialize
@@ -144,7 +163,7 @@ namespace SteamRichPresence {
                 logMsg("Sleep done, resolving ISteamFriends...\n");
 
                 // Resolve ISteamFriends interface
-                void* friends = resolveSteamFriends(api);
+                void* friends = resolveSteamFriends(api, steamClientLoaded);
                 if (!friends) {
                     logMsg("Failed to resolve ISteamFriends\n");
                     logClose();
@@ -176,14 +195,19 @@ namespace SteamRichPresence {
             CloseHandle(hThread);
     }
 
-    // ---- Vtable hook setup ----
+    // ---- Interface resolution and vtable hooking ----
 
-    static void* resolveSteamFriends(HMODULE steamApi) {
+    // Resolve ISteamFriends using a multi-level fallback strategy:
+    //   1. Try getter exports (v017, v016, v015, legacy SteamFriends).
+    //      If a getter is a thunk with null target, poll with adaptive timeout.
+    //   2. Fall back to SteamInternal_FindOrCreateUserInterface.
+    static void* resolveSteamFriends(HMODULE steamApi, bool steamClientLoaded) {
         typedef void* (*GetterFn)();
         const char* versions[] = {
             "SteamAPI_SteamFriends_v017",
             "SteamAPI_SteamFriends_v016",
             "SteamAPI_SteamFriends_v015",
+            "SteamFriends",
         };
         for (auto ver : versions) {
             auto fn = reinterpret_cast<GetterFn>(GetProcAddress(steamApi, ver));
@@ -199,8 +223,9 @@ namespace SteamRichPresence {
                 continue;
             }
 
-            // If the getter is a thunk (jmp [rip+disp]), check that its target
-            // pointer is non-null before calling. Steam may not have filled it yet.
+            // If the getter is a thunk (indirect jump), its target pointer may
+            // still be null if Steam hasn't initialized yet. Detect thunk patterns
+            // and poll until the target is filled in.
             void* thunkTarget = resolveThunkTarget(fnBytes);
             if (!thunkTarget) {
                 // Not a thunk, or target is null — for thunks, poll until ready
@@ -210,8 +235,13 @@ namespace SteamRichPresence {
                     isThunk = true;
                 }
                 if (isThunk) {
-                    logMsg("  Getter is a thunk with null target, polling...\n");
-                    for (int wait = 0; wait < 60; wait++) {
+                    // Adaptive timeout: if steamclient64.dll is already loaded, Steam
+                    // has initialized and null thunks won't change (short timeout).
+                    // Otherwise Steam may still be starting (longer timeout).
+                    int maxWait = steamClientLoaded ? 5 : 30;
+                    logMsg("  Getter is a thunk with null target, polling (max %ds)...\n",
+                           maxWait);
+                    for (int wait = 0; wait < maxWait; wait++) {
                         Sleep(1000);
                         thunkTarget = resolveThunkTarget(fnBytes);
                         if (thunkTarget) {
@@ -221,7 +251,7 @@ namespace SteamRichPresence {
                         }
                     }
                     if (!thunkTarget) {
-                        logMsg("  Thunk target still null after 60s, skipping\n");
+                        logMsg("  Thunk target still null after %ds, skipping\n", maxWait);
                         continue;
                     }
                 }
@@ -241,6 +271,40 @@ namespace SteamRichPresence {
                 return iface;
             }
         }
+
+        // Fallback: use SteamInternal_FindOrCreateUserInterface to get the interface
+        // directly. This works even when getter thunks are broken (crack proxy DLLs).
+        logMsg("  All getters failed, trying SteamInternal_FindOrCreateUserInterface...\n");
+        typedef void* (*FindOrCreateFn)(int hSteamUser, const char* pszVersion);
+        auto findOrCreate = reinterpret_cast<FindOrCreateFn>(
+            GetProcAddress(steamApi, "SteamInternal_FindOrCreateUserInterface"));
+        if (findOrCreate) {
+            typedef int (*GetUserFn)();
+            auto getUser = reinterpret_cast<GetUserFn>(
+                GetProcAddress(steamApi, "SteamAPI_GetHSteamUser"));
+            int user = getUser ? getUser() : 1;
+            logMsg("  HSteamUser = %d\n", user);
+
+            const char* ifaceVersions[] = {
+                "SteamFriends017", "SteamFriends016", "SteamFriends015",
+            };
+            for (auto ver : ifaceVersions) {
+                logMsg("  Trying FindOrCreateUserInterface(%d, \"%s\")...\n", user, ver);
+                void* iface = findOrCreate(user, ver);
+                logMsg("  Result: %p\n", iface);
+                if (iface) {
+                    void** vtablePtr = *reinterpret_cast<void***>(iface);
+                    if (vtablePtr) {
+                        logMsg("  Interface vtable ptr: %p\n", vtablePtr);
+                        return iface;
+                    }
+                    logMsg("  Skipping: vtable pointer is null\n");
+                }
+            }
+        } else {
+            logMsg("  SteamInternal_FindOrCreateUserInterface not found\n");
+        }
+
         return nullptr;
     }
 
@@ -375,9 +439,15 @@ namespace SteamRichPresence {
     }
 
     // Resolve the target address of a thunk (indirect jump via RIP-relative pointer).
+    // Returns the dereferenced target, or nullptr if the pattern doesn't match or
+    // the target pointer is null (not yet resolved by the loader/runtime).
     //
-    //   48 8B 05 [d32] {FF E0 | 48 FF E0}   mov rax,[rip+d]; jmp rax
-    //   [48] FF 25 [d32]                     jmp [rip+d]
+    // Pattern 1: mov rax,[rip+d32]; jmp rax
+    //   48 8B 05 [d32]  FF E0        (without REX on jmp)
+    //   48 8B 05 [d32]  48 FF E0     (with REX on jmp)
+    //
+    // Pattern 2: jmp [rip+d32]
+    //   [48] FF 25 [d32]
     static void* resolveThunkTarget(const uint8_t* fn) {
         if (fn[0] == 0x48 && fn[1] == 0x8B && fn[2] == 0x05) {
             if ((fn[7] == 0xFF && fn[8] == 0xE0) ||
