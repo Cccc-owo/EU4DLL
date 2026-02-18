@@ -476,34 +476,60 @@ namespace FileRead {
             BytePattern::temp_instance()
                 .find_pattern("48 8B 12 48 8D 0D ? ? ? ? E8 ? ? ? ? 85 C0 0F 94 C3");
 
-            if (BytePattern::temp_instance().count() > 0) {
+            const size_t expected = 2;
+            size_t count = BytePattern::temp_instance().count();
+
+            if (count == 0) {
+                BytePattern::LoggingInfo("[checksum] Pattern not found!\n");
+            } else {
+                if (count != expected) {
+                    BytePattern::LoggingInfo(
+                        "[checksum] WARNING: expected " + std::to_string(expected) +
+                        " matches, found " + std::to_string(count) + "\n");
+                }
+
                 uintptr_t firstMatch = BytePattern::temp_instance().get_first().address();
 
                 // Resolve vanilla checksum address for logging
                 vanillaChecksum = reinterpret_cast<const char*>(
                     Injector::GetBranchDestination(firstMatch + 3, true));
 
+                const uint8_t expectedBytes[] = { 0x85, 0xC0, 0x0F, 0x94, 0xC3 };
                 size_t patched = 0;
-                for (size_t i = 0; i < BytePattern::temp_instance().count(); i++) {
+                for (size_t i = 0; i < count; i++) {
                     uintptr_t addr = BytePattern::temp_instance().get(i).address();
-                    // Offset +15: "85 C0 0F 94 C3" = TEST EAX,EAX / SETZ BL (5 bytes)
-                    // Replace with: "B3 01 90 90 90" = MOV BL,1 / NOP / NOP / NOP
                     uintptr_t patchAddr = addr + 15;
-                    Injector::WriteMemory<uint8_t>(patchAddr,     0xB3, true); // MOV BL, imm8
-                    Injector::WriteMemory<uint8_t>(patchAddr + 1, 0x01, true); // 1
-                    Injector::WriteMemory<uint8_t>(patchAddr + 2, 0x90, true); // NOP
-                    Injector::WriteMemory<uint8_t>(patchAddr + 3, 0x90, true); // NOP
-                    Injector::WriteMemory<uint8_t>(patchAddr + 4, 0x90, true); // NOP
+
+                    // Verify target bytes before patching
+                    bool match = true;
+                    for (int j = 0; j < 5; j++) {
+                        if (Injector::ReadMemory<uint8_t>(patchAddr + j) != expectedBytes[j]) {
+                            match = false;
+                            break;
+                        }
+                    }
+                    if (!match) {
+                        BytePattern::LoggingInfo(
+                            "[checksum] Skipped site " + std::to_string(i) +
+                            ": unexpected bytes at patch target\n");
+                        continue;
+                    }
+
+                    // "85 C0 0F 94 C3" = TEST EAX,EAX / SETZ BL (5 bytes)
+                    // → "B3 01 90 90 90" = MOV BL,1 / NOP / NOP / NOP
+                    Injector::WriteMemory<uint8_t>(patchAddr,     0xB3, true);
+                    Injector::WriteMemory<uint8_t>(patchAddr + 1, 0x01, true);
+                    Injector::WriteMemory<uint8_t>(patchAddr + 2, 0x90, true);
+                    Injector::WriteMemory<uint8_t>(patchAddr + 3, 0x90, true);
+                    Injector::WriteMemory<uint8_t>(patchAddr + 4, 0x90, true);
                     patched++;
                 }
 
                 BytePattern::LoggingInfo(
-                    "[checksum] Patched " + std::to_string(patched) +
-                    " compare sites" +
+                    "[checksum] Patched " + std::to_string(patched) + "/" +
+                    std::to_string(count) + " compare sites" +
                     (vanillaChecksum ? ", vanilla checksum: " + std::string(vanillaChecksum) : "") +
                     "\n");
-            } else {
-                BytePattern::LoggingInfo("[checksum] Pattern not found!\n");
             }
         }
     }
