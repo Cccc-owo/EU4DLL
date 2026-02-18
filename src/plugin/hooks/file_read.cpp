@@ -5,6 +5,7 @@
 #include "../plugin_64.h"
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace FileRead {
@@ -16,7 +17,9 @@ namespace FileRead {
     };
 
     static std::unordered_map<HANDLE, HandleState> trackedHandles;
-    static CRITICAL_SECTION                        handleLock;
+    // Write-tracked handles for text file extensions
+    static std::unordered_set<HANDLE> writeTrackedHandles;
+    static CRITICAL_SECTION           handleLock;
 
     // Cached game directory prefix for vanilla file detection
     static std::wstring gameDirPrefix;
@@ -26,6 +29,7 @@ namespace FileRead {
 
     static decltype(&CreateFileW) origCreateFileW = nullptr;
     static decltype(&ReadFile)    origReadFile    = nullptr;
+    static decltype(&WriteFile)   origWriteFile   = nullptr;
     static decltype(&CloseHandle) origCloseHandle = nullptr;
 
     using GetFileSizeExPtr    = BOOL(WINAPI*)(HANDLE, PLARGE_INTEGER);
@@ -35,26 +39,29 @@ namespace FileRead {
     static SetFilePointerExPtr origSetFilePointerEx = nullptr;
     static GetFileSizePtr      origGetFileSize      = nullptr;
 
-    static bool isTextFile(const wchar_t* path, bool* isTxt = nullptr) {
+    // Extract lowercase file extension (including dot) into a fixed buffer.
+    // Returns empty view if path has no valid extension (3-5 chars).
+    static std::wstring_view getExtLower(const wchar_t* path, wchar_t (&buf)[6]) {
         if (!path)
-            return false;
-
+            return {};
         std::wstring_view sv(path);
         auto              dot = sv.rfind(L'.');
         if (dot == std::wstring_view::npos)
-            return false;
-
+            return {};
         auto ext = sv.substr(dot);
-
         if (ext.size() < 3 || ext.size() > 5)
-            return false;
-
-        // Case-insensitive comparison for common text extensions
-        wchar_t lower[6] = {};
+            return {};
         for (size_t i = 0; i < ext.size() && i < 5; i++)
-            lower[i] = (ext[i] >= L'A' && ext[i] <= L'Z') ? ext[i] + 32 : ext[i];
+            buf[i] = (ext[i] >= L'A' && ext[i] <= L'Z') ? ext[i] + 32 : ext[i];
+        buf[ext.size()] = L'\0';
+        return {buf, ext.size()};
+    }
 
-        std::wstring_view lext(lower, ext.size());
+    static bool isTextFile(const wchar_t* path, bool* isTxt = nullptr) {
+        wchar_t           lower[6] = {};
+        std::wstring_view lext     = getExtLower(path, lower);
+        if (lext.empty())
+            return false;
 
         if (lext == L".yml" || lext == L".txt") {
             if (isTxt)
@@ -62,6 +69,15 @@ namespace FileRead {
             return true;
         }
         return false;
+    }
+
+    static bool isWriteTextFile(const wchar_t* path) {
+        wchar_t           lower[6] = {};
+        std::wstring_view lext     = getExtLower(path, lower);
+        if (lext.empty())
+            return false;
+        return lext == L".txt" || lext == L".yml" || lext == L".log" || lext == L".csv" ||
+               lext == L".xml";
     }
 
     static bool isVanillaFile(const wchar_t* path) {
@@ -98,6 +114,10 @@ namespace FileRead {
 
         for (size_t i = 0; i < len; i++) {
             unsigned char c = (unsigned char)buf[i];
+
+            // Escape marker found → already in Paradox escape encoding, not UTF-8
+            if (c >= 0x10 && c <= 0x13)
+                return false;
 
             // CP1252 / Latin-1 detection: only for .txt files which may use these encodings.
             // Bytes 0x80-0xBF can only appear as continuation bytes (10xxxxxx) in valid
@@ -310,6 +330,14 @@ namespace FileRead {
             }
         }
 
+        // Track write handles for text file extensions
+        if (h != INVALID_HANDLE_VALUE && (dwDesiredAccess & GENERIC_WRITE) &&
+            isWriteTextFile(lpFileName)) {
+            EnterCriticalSection(&handleLock);
+            writeTrackedHandles.insert(h);
+            LeaveCriticalSection(&handleLock);
+        }
+
         return h;
     }
 
@@ -386,9 +414,10 @@ namespace FileRead {
     }
 
     static BOOL WINAPI hookedCloseHandle(HANDLE hObject) {
-        if (!trackedHandles.empty()) {
+        if (!trackedHandles.empty() || !writeTrackedHandles.empty()) {
             EnterCriticalSection(&handleLock);
             trackedHandles.erase(hObject);
+            writeTrackedHandles.erase(hObject);
             LeaveCriticalSection(&handleLock);
         }
 
@@ -426,6 +455,27 @@ namespace FileRead {
         }
         LeaveCriticalSection(&handleLock);
         return origGetFileSize(hFile, lpFileSizeHigh);
+    }
+
+    static BOOL WINAPI hookedWriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite,
+                                       LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped) {
+        if (!writeTrackedHandles.empty()) {
+            EnterCriticalSection(&handleLock);
+            bool isTracked = writeTrackedHandles.count(hFile) > 0;
+            LeaveCriticalSection(&handleLock);
+
+            if (isTracked) {
+                std::string  escaped((const char*)lpBuffer, nNumberOfBytesToWrite);
+                std::wstring wide = convertEscapedTextToWideText(escaped);
+                std::string  utf8 = convertWideTextToUtf8(wide);
+
+                return origWriteFile(hFile, utf8.data(), (DWORD)utf8.size(), lpNumberOfBytesWritten,
+                                     lpOverlapped);
+            }
+        }
+
+        return origWriteFile(hFile, lpBuffer, nNumberOfBytesToWrite, lpNumberOfBytesWritten,
+                             lpOverlapped);
     }
 
     // Checksum spoofing: the game compares a computed checksum against a hardcoded
@@ -468,6 +518,9 @@ namespace FileRead {
 
             origGetFileSize = (GetFileSizePtr)IATHook::Hook(
                 exeModule, "kernel32.dll", "GetFileSize", (void*)hookedGetFileSize);
+
+            origWriteFile = (decltype(origWriteFile))IATHook::Hook(
+                exeModule, "kernel32.dll", "WriteFile", (void*)hookedWriteFile);
         }
 
         // Checksum spoof: patch "TEST EAX,EAX / SETZ BL" after the compare CALL
