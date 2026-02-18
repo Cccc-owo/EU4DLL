@@ -239,8 +239,7 @@ namespace SteamRichPresence {
                     // has initialized and null thunks won't change (short timeout).
                     // Otherwise Steam may still be starting (longer timeout).
                     int maxWait = steamClientLoaded ? 5 : 30;
-                    logMsg("  Getter is a thunk with null target, polling (max %ds)...\n",
-                           maxWait);
+                    logMsg("  Getter is a thunk with null target, polling (max %ds)...\n", maxWait);
                     for (int wait = 0; wait < maxWait; wait++) {
                         Sleep(1000);
                         thunkTarget = resolveThunkTarget(fnBytes);
@@ -280,13 +279,15 @@ namespace SteamRichPresence {
             GetProcAddress(steamApi, "SteamInternal_FindOrCreateUserInterface"));
         if (findOrCreate) {
             typedef int (*GetUserFn)();
-            auto getUser = reinterpret_cast<GetUserFn>(
-                GetProcAddress(steamApi, "SteamAPI_GetHSteamUser"));
+            auto getUser =
+                reinterpret_cast<GetUserFn>(GetProcAddress(steamApi, "SteamAPI_GetHSteamUser"));
             int user = getUser ? getUser() : 1;
             logMsg("  HSteamUser = %d\n", user);
 
             const char* ifaceVersions[] = {
-                "SteamFriends017", "SteamFriends016", "SteamFriends015",
+                "SteamFriends017",
+                "SteamFriends016",
+                "SteamFriends015",
             };
             for (auto ver : ifaceVersions) {
                 logMsg("  Trying FindOrCreateUserInterface(%d, \"%s\")...\n", user, ver);
