@@ -36,7 +36,7 @@ inline wchar_t UCS2ToCP1252(int cp) {
     return result;
 }
 
-inline wchar_t CP1252ToUCS2(unsigned char cp) {
+wchar_t CP1252ToUCS2(unsigned char cp) {
     wchar_t result = cp;
     switch (cp) {
         case 0x80: result = 0x20AC; break;
@@ -72,7 +72,7 @@ inline wchar_t CP1252ToUCS2(unsigned char cp) {
     return result;
 }
 
-std::string convertWideTextToEscapedText(const wchar_t* from) {
+std::string convertWideTextToEscapedText(const wchar_t* from, bool forUtf8) {
     if (!from)
         return {};
 
@@ -83,10 +83,12 @@ std::string convertWideTextToEscapedText(const wchar_t* from) {
     for (unsigned int fromIndex = 0; fromIndex < size; fromIndex++) {
         wchar_t cp = from[fromIndex];
 
-        wchar_t mapped = UCS2ToCP1252(cp);
-        if (mapped != cp) {
-            result += static_cast<char>(static_cast<BYTE>(mapped));
-            continue;
+        if (!forUtf8) {
+            wchar_t mapped = UCS2ToCP1252(cp);
+            if (mapped != cp) {
+                result += static_cast<char>(static_cast<BYTE>(mapped));
+                continue;
+            }
         }
 
         if (cp > 0x100 && cp < 0xA00) {

@@ -11,9 +11,8 @@ namespace FileRead {
 
     struct HandleState {
         std::vector<char> pendingData;
-        size_t            readOffset     = 0;
-        bool              isChecksumHook = false; // true = serve empty content
-        bool              isTxtFile      = false; // true = .txt (may be CP1252)
+        size_t            readOffset = 0;
+        bool              converted  = false; // true = pendingData holds converted content
     };
 
     static std::unordered_map<HANDLE, HandleState> trackedHandles;
@@ -31,6 +30,13 @@ namespace FileRead {
     static decltype(&CreateFileW) origCreateFileW = nullptr;
     static decltype(&ReadFile)    origReadFile    = nullptr;
     static decltype(&CloseHandle) origCloseHandle = nullptr;
+
+    using GetFileSizeExPtr    = BOOL(WINAPI*)(HANDLE, PLARGE_INTEGER);
+    using SetFilePointerExPtr = BOOL(WINAPI*)(HANDLE, LARGE_INTEGER, PLARGE_INTEGER, DWORD);
+    using GetFileSizePtr      = DWORD(WINAPI*)(HANDLE, LPDWORD);
+    static GetFileSizeExPtr    origGetFileSizeEx    = nullptr;
+    static SetFilePointerExPtr origSetFilePointerEx = nullptr;
+    static GetFileSizePtr      origGetFileSize      = nullptr;
 
     static bool isTextFile(const wchar_t* path, bool* isTxt = nullptr) {
         if (!path)
@@ -147,11 +153,13 @@ namespace FileRead {
 
     static bool convertUtf8ToEscaped(const char* input, size_t inputLen,
                                      std::vector<char>& output) {
-        // Skip BOM if present
+        // Skip BOM if present, but remember it so we can restore it
         const char* src    = input;
         size_t      srcLen = inputLen;
+        bool        hasBom = false;
         if (srcLen >= 3 && (unsigned char)src[0] == 0xEF && (unsigned char)src[1] == 0xBB &&
             (unsigned char)src[2] == 0xBF) {
+            hasBom = true;
             src += 3;
             srcLen -= 3;
         }
@@ -163,28 +171,68 @@ namespace FileRead {
         if (wideText.empty())
             return false;
 
-        std::string escapedText = convertWideTextToEscapedText(wideText.c_str());
+        std::string escapedText = convertWideTextToEscapedText(wideText.c_str(), true);
         if (escapedText.empty())
             return false;
 
-        output.assign(escapedText.begin(), escapedText.end());
+        // The escape encoding produces raw bytes (0x00-0xFF) that are not valid UTF-8.
+        // The game reads UTF-8 files, so each escaped byte must be re-encoded:
+        //   byte 0x00-0x7F -> output as-is (single UTF-8 byte)
+        //   byte 0x80-0xFF -> map via CP1252ToUCS2 to Unicode codepoint -> UTF-8
+        std::string utf8Result;
+        utf8Result.reserve(escapedText.size() * 2);
+
+        for (size_t i = 0; i < escapedText.size(); i++) {
+            unsigned char b = (unsigned char)escapedText[i];
+            wchar_t       cp = CP1252ToUCS2(b);
+
+            if (cp < 0x80) {
+                utf8Result += (char)cp;
+            } else if (cp < 0x800) {
+                utf8Result += (char)(0xC0 | (cp >> 6));
+                utf8Result += (char)(0x80 | (cp & 0x3F));
+            } else {
+                utf8Result += (char)(0xE0 | (cp >> 12));
+                utf8Result += (char)(0x80 | ((cp >> 6) & 0x3F));
+                utf8Result += (char)(0x80 | (cp & 0x3F));
+            }
+        }
+
+        // Restore BOM — EU4's YML parser requires it
+        if (hasBom) {
+            output.reserve(3 + utf8Result.size());
+            output.push_back((char)0xEF);
+            output.push_back((char)0xBB);
+            output.push_back((char)0xBF);
+            output.insert(output.end(), utf8Result.begin(), utf8Result.end());
+        } else {
+            output.assign(utf8Result.begin(), utf8Result.end());
+        }
 
         return true;
     }
 
-    // Read entire file content from current position to end.
+    // Helper to seek a file handle back to the beginning using the original API.
+    static void seekToBeginning(HANDLE hFile) {
+        LARGE_INTEGER zero = {};
+        auto seekFunc = origSetFilePointerEx ? origSetFilePointerEx
+                                             : (SetFilePointerExPtr)&SetFilePointerEx;
+        seekFunc(hFile, zero, nullptr, FILE_BEGIN);
+    }
+
+    // Read entire file content from beginning to end.
     // Returns empty vector on failure.
     static std::vector<char> readEntireFile(HANDLE hFile) {
         LARGE_INTEGER fileSize;
-        if (!GetFileSizeEx(hFile, &fileSize) || fileSize.QuadPart == 0)
+        auto getSizeFunc = origGetFileSizeEx ? origGetFileSizeEx
+                                            : (GetFileSizeExPtr)&GetFileSizeEx;
+        if (!getSizeFunc(hFile, &fileSize) || fileSize.QuadPart == 0)
             return {};
 
         size_t            totalSize = (size_t)fileSize.QuadPart;
         std::vector<char> content(totalSize);
 
-        // Seek to beginning
-        LARGE_INTEGER zero = {};
-        SetFilePointerEx(hFile, zero, nullptr, FILE_BEGIN);
+        seekToBeginning(hFile);
 
         size_t totalRead = 0;
         while (totalRead < totalSize) {
@@ -203,6 +251,49 @@ namespace FileRead {
         return content;
     }
 
+    // Untrack a handle: seek back to beginning and remove from map.
+    static void untrackHandle(HANDLE hFile) {
+        seekToBeginning(hFile);
+        EnterCriticalSection(&handleLock);
+        trackedHandles.erase(hFile);
+        LeaveCriticalSection(&handleLock);
+    }
+
+    // Eagerly read and convert a file right after opening.
+    // If conversion succeeds, populates state.pendingData and sets state.converted = true.
+    // If the file doesn't need conversion, the handle is untracked.
+    // Must be called WITHOUT handleLock held.
+    static void eagerConvert(HANDLE hFile, bool isTxtFile) {
+        std::vector<char> fileContent = readEntireFile(hFile);
+
+        if (fileContent.empty()) {
+            untrackHandle(hFile);
+            return;
+        }
+
+        if (!needsUtf8Conversion(fileContent.data(), fileContent.size(), isTxtFile)) {
+            untrackHandle(hFile);
+            return;
+        }
+
+        std::vector<char> converted;
+        if (!convertUtf8ToEscaped(fileContent.data(), fileContent.size(), converted)) {
+            untrackHandle(hFile);
+            return;
+        }
+
+        EnterCriticalSection(&handleLock);
+        auto it = trackedHandles.find(hFile);
+        if (it != trackedHandles.end()) {
+            it->second.pendingData = std::move(converted);
+            it->second.readOffset  = 0;
+            it->second.converted   = true;
+        }
+        LeaveCriticalSection(&handleLock);
+
+        seekToBeginning(hFile);
+    }
+
     static HANDLE WINAPI hookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess,
                                            DWORD                 dwShareMode,
                                            LPSECURITY_ATTRIBUTES lpSecurityAttributes,
@@ -219,9 +310,7 @@ namespace FileRead {
             // Checksum override: intercept checksum_manifest.txt and serve empty content
             if (!checksumOverride.empty() && isChecksumManifest(lpFileName)) {
                 HandleState state;
-                state.isChecksumHook = true;
-                // Empty pendingData with readOffset=1 signals "serve empty content"
-                // (readOffset=1 so hookedReadFile won't try to read the actual file)
+                state.converted   = true;
                 state.pendingData = {'\n'}; // minimal valid content (single newline)
                 state.readOffset  = 0;
                 EnterCriticalSection(&handleLock);
@@ -234,10 +323,13 @@ namespace FileRead {
                 // Skip vanilla files — they should not be converted
                 if (!isVanillaFile(lpFileName)) {
                     HandleState state;
-                    state.isTxtFile = txtFlag;
                     EnterCriticalSection(&handleLock);
                     trackedHandles[h] = std::move(state);
                     LeaveCriticalSection(&handleLock);
+
+                    // Eagerly read and convert now so that GetFileSize/GetFileSizeEx
+                    // returns the converted size before the first ReadFile
+                    eagerConvert(h, txtFlag);
                 }
             }
         }
@@ -249,65 +341,10 @@ namespace FileRead {
                                       LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped) {
         EnterCriticalSection(&handleLock);
         auto it = trackedHandles.find(hFile);
-        if (it == trackedHandles.end()) {
+        if (it == trackedHandles.end() || !it->second.converted) {
             LeaveCriticalSection(&handleLock);
             return origReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead,
                                 lpOverlapped);
-        }
-
-        // First read on this handle: load and convert the file
-        // (skip for checksum hook handles — their data is already set)
-        if (!it->second.isChecksumHook && it->second.pendingData.empty() &&
-            it->second.readOffset == 0) {
-            // Release lock during file I/O and conversion
-            LeaveCriticalSection(&handleLock);
-
-            std::vector<char> fileContent = readEntireFile(hFile);
-
-            if (fileContent.empty()) {
-                // Failed to read — untrack and fall back
-                EnterCriticalSection(&handleLock);
-                trackedHandles.erase(hFile);
-                LeaveCriticalSection(&handleLock);
-                LARGE_INTEGER zero = {};
-                SetFilePointerEx(hFile, zero, nullptr, FILE_BEGIN);
-                return origReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead,
-                                    lpOverlapped);
-            }
-
-            if (!needsUtf8Conversion(fileContent.data(), fileContent.size(), it->second.isTxtFile)) {
-                // No conversion needed — untrack and let original ReadFile handle it
-                EnterCriticalSection(&handleLock);
-                trackedHandles.erase(hFile);
-                LeaveCriticalSection(&handleLock);
-                LARGE_INTEGER zero = {};
-                SetFilePointerEx(hFile, zero, nullptr, FILE_BEGIN);
-                return origReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead,
-                                    lpOverlapped);
-            }
-
-            std::vector<char> converted;
-            if (!convertUtf8ToEscaped(fileContent.data(), fileContent.size(), converted)) {
-                // Conversion failed — untrack and fall back with original data
-                EnterCriticalSection(&handleLock);
-                trackedHandles.erase(hFile);
-                LeaveCriticalSection(&handleLock);
-                LARGE_INTEGER zero = {};
-                SetFilePointerEx(hFile, zero, nullptr, FILE_BEGIN);
-                return origReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead,
-                                    lpOverlapped);
-            }
-
-            EnterCriticalSection(&handleLock);
-            // Re-check: handle may have been closed/erased while lock was released
-            it = trackedHandles.find(hFile);
-            if (it == trackedHandles.end()) {
-                LeaveCriticalSection(&handleLock);
-                return origReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead,
-                                    lpOverlapped);
-            }
-            it->second.pendingData = std::move(converted);
-            it->second.readOffset  = 0;
         }
 
         // Serve data from shadow buffer
@@ -327,12 +364,76 @@ namespace FileRead {
         return TRUE;
     }
 
+    static BOOL WINAPI hookedSetFilePointerEx(HANDLE hFile, LARGE_INTEGER liDistanceToMove,
+                                               PLARGE_INTEGER lpNewFilePointer,
+                                               DWORD          dwMoveMethod) {
+        EnterCriticalSection(&handleLock);
+        auto it = trackedHandles.find(hFile);
+        if (it != trackedHandles.end() && it->second.converted) {
+            HandleState& state   = it->second;
+            LONGLONG     dataLen = (LONGLONG)state.pendingData.size();
+            LONGLONG     newPos  = 0;
+
+            switch (dwMoveMethod) {
+                case FILE_BEGIN:   newPos = liDistanceToMove.QuadPart; break;
+                case FILE_CURRENT: newPos = (LONGLONG)state.readOffset + liDistanceToMove.QuadPart; break;
+                case FILE_END:     newPos = dataLen + liDistanceToMove.QuadPart; break;
+                default:
+                    LeaveCriticalSection(&handleLock);
+                    SetLastError(ERROR_INVALID_PARAMETER);
+                    return FALSE;
+            }
+
+            if (newPos < 0)
+                newPos = 0;
+            if (newPos > dataLen)
+                newPos = dataLen;
+
+            state.readOffset = (size_t)newPos;
+
+            if (lpNewFilePointer)
+                lpNewFilePointer->QuadPart = newPos;
+
+            LeaveCriticalSection(&handleLock);
+            return TRUE;
+        }
+        LeaveCriticalSection(&handleLock);
+        return origSetFilePointerEx(hFile, liDistanceToMove, lpNewFilePointer, dwMoveMethod);
+    }
+
     static BOOL WINAPI hookedCloseHandle(HANDLE hObject) {
         EnterCriticalSection(&handleLock);
         trackedHandles.erase(hObject);
         LeaveCriticalSection(&handleLock);
 
         return origCloseHandle(hObject);
+    }
+
+    static BOOL WINAPI hookedGetFileSizeEx(HANDLE hFile, PLARGE_INTEGER lpFileSize) {
+        EnterCriticalSection(&handleLock);
+        auto it = trackedHandles.find(hFile);
+        if (it != trackedHandles.end() && it->second.converted) {
+            if (lpFileSize)
+                lpFileSize->QuadPart = (LONGLONG)it->second.pendingData.size();
+            LeaveCriticalSection(&handleLock);
+            return TRUE;
+        }
+        LeaveCriticalSection(&handleLock);
+        return origGetFileSizeEx(hFile, lpFileSize);
+    }
+
+    static DWORD WINAPI hookedGetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh) {
+        EnterCriticalSection(&handleLock);
+        auto it = trackedHandles.find(hFile);
+        if (it != trackedHandles.end() && it->second.converted) {
+            LONGLONG convSize = (LONGLONG)it->second.pendingData.size();
+            LeaveCriticalSection(&handleLock);
+            if (lpFileSizeHigh)
+                *lpFileSizeHigh = (DWORD)(convSize >> 32);
+            return (DWORD)(convSize & 0xFFFFFFFF);
+        }
+        LeaveCriticalSection(&handleLock);
+        return origGetFileSize(hFile, lpFileSizeHigh);
     }
 
     // Known checksum when manifest is emptied — used as search target
@@ -504,6 +605,15 @@ namespace FileRead {
 
             origCloseHandle = (decltype(origCloseHandle))IATHook::Hook(
                 exeModule, "kernel32.dll", "CloseHandle", (void*)hookedCloseHandle);
+
+            origGetFileSizeEx = (GetFileSizeExPtr)IATHook::Hook(
+                exeModule, "kernel32.dll", "GetFileSizeEx", (void*)hookedGetFileSizeEx);
+
+            origSetFilePointerEx = (SetFilePointerExPtr)IATHook::Hook(
+                exeModule, "kernel32.dll", "SetFilePointerEx", (void*)hookedSetFilePointerEx);
+
+            origGetFileSize = (GetFileSizePtr)IATHook::Hook(
+                exeModule, "kernel32.dll", "GetFileSize", (void*)hookedGetFileSize);
 
             // Launch background thread to patch checksum in memory after game computes it
             if (!checksumOverride.empty() && checksumOverride.size() == 4) {
