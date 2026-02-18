@@ -75,19 +75,29 @@ namespace FileRead {
     }
 
     static bool needsUtf8Conversion(const char* buf, size_t len, bool isTxtFile) {
-        // UTF-8 BOM: file is definitively UTF-8, always convert
+        // UTF-8 BOM: check content after BOM for escape markers to distinguish
+        // pre-encoded files (BOM + escape sequences) from raw UTF-8 files (BOM + UTF-8).
         if (len >= 3 && (unsigned char)buf[0] == 0xEF &&
-            (unsigned char)buf[1] == 0xBB && (unsigned char)buf[2] == 0xBF)
-            return true;
+            (unsigned char)buf[1] == 0xBB && (unsigned char)buf[2] == 0xBF) {
+            // Scan for escape markers and multibyte content in one pass
+            bool hasHighByte = false;
+            for (size_t i = 3; i < len; i++) {
+                unsigned char c = (unsigned char)buf[i];
+                if (c >= 0x10 && c <= 0x13)
+                    return false; // Escape marker found → already pre-encoded
+                if (c >= 0x80)
+                    hasHighByte = true;
+            }
+            // BOM + no escape markers + has multibyte → genuine UTF-8, needs conversion
+            // BOM + no escape markers + pure ASCII → no conversion needed
+            return hasHighByte;
+        }
 
+        // No BOM: use heuristics to detect UTF-8 multibyte content
         bool hasMultibyte = false;
 
         for (size_t i = 0; i < len; i++) {
             unsigned char c = (unsigned char)buf[i];
-
-            // Escape markers 0x10-0x13: already in game's internal encoding
-            if (c >= 0x10 && c <= 0x13)
-                return false;
 
             // CP1252 / Latin-1 detection: only for .txt files which may use these encodings.
             // Bytes 0x80-0xBF can only appear as continuation bytes (10xxxxxx) in valid
@@ -306,6 +316,10 @@ namespace FileRead {
 
     static BOOL WINAPI hookedReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead,
                                       LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped) {
+        if (trackedHandles.empty())
+            return origReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead,
+                                lpOverlapped);
+
         EnterCriticalSection(&handleLock);
         auto it = trackedHandles.find(hFile);
         if (it == trackedHandles.end() || !it->second.converted) {
@@ -334,6 +348,9 @@ namespace FileRead {
     static BOOL WINAPI hookedSetFilePointerEx(HANDLE hFile, LARGE_INTEGER liDistanceToMove,
                                                PLARGE_INTEGER lpNewFilePointer,
                                                DWORD          dwMoveMethod) {
+        if (trackedHandles.empty())
+            return origSetFilePointerEx(hFile, liDistanceToMove, lpNewFilePointer, dwMoveMethod);
+
         EnterCriticalSection(&handleLock);
         auto it = trackedHandles.find(hFile);
         if (it != trackedHandles.end() && it->second.converted) {
@@ -369,14 +386,19 @@ namespace FileRead {
     }
 
     static BOOL WINAPI hookedCloseHandle(HANDLE hObject) {
-        EnterCriticalSection(&handleLock);
-        trackedHandles.erase(hObject);
-        LeaveCriticalSection(&handleLock);
+        if (!trackedHandles.empty()) {
+            EnterCriticalSection(&handleLock);
+            trackedHandles.erase(hObject);
+            LeaveCriticalSection(&handleLock);
+        }
 
         return origCloseHandle(hObject);
     }
 
     static BOOL WINAPI hookedGetFileSizeEx(HANDLE hFile, PLARGE_INTEGER lpFileSize) {
+        if (trackedHandles.empty())
+            return origGetFileSizeEx(hFile, lpFileSize);
+
         EnterCriticalSection(&handleLock);
         auto it = trackedHandles.find(hFile);
         if (it != trackedHandles.end() && it->second.converted) {
@@ -390,6 +412,9 @@ namespace FileRead {
     }
 
     static DWORD WINAPI hookedGetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh) {
+        if (trackedHandles.empty())
+            return origGetFileSize(hFile, lpFileSizeHigh);
+
         EnterCriticalSection(&handleLock);
         auto it = trackedHandles.find(hFile);
         if (it != trackedHandles.end() && it->second.converted) {
