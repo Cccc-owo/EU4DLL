@@ -13,10 +13,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ulReasonForCall, LPVOID lpReserved)
         // INI settings
         BytePattern::LoggingInfo("[init] Loading INI options...\n");
         Ini::GetOptionsFromIni(&options);
-        BytePattern::LoggingInfo("[init] Options: autoUtf8=" +
-                                std::to_string(options.autoUtf8Conversion) +
-                                " steamRP=" + std::to_string(options.steamRichPresence) +
-                                " achievementUnlock=" + std::to_string(options.achievementUnlock) + "\n");
+        BytePattern::LoggingInfo(
+            "[init] Options: autoUtf8=" + std::to_string(options.autoUtf8Conversion) +
+            " steamRP=" + std::to_string(options.steamRichPresence) +
+            " achievementUnlock=" + std::to_string(options.achievementUnlock) + "\n");
 
         // Version check (v1.37 only)
         BytePattern::LoggingInfo("[init] Validating game version...\n");

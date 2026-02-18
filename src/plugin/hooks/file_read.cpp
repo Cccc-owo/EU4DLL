@@ -77,8 +77,8 @@ namespace FileRead {
     static bool needsUtf8Conversion(const char* buf, size_t len, bool isTxtFile) {
         // UTF-8 BOM: check content after BOM for escape markers to distinguish
         // pre-encoded files (BOM + escape sequences) from raw UTF-8 files (BOM + UTF-8).
-        if (len >= 3 && (unsigned char)buf[0] == 0xEF &&
-            (unsigned char)buf[1] == 0xBB && (unsigned char)buf[2] == 0xBF) {
+        if (len >= 3 && (unsigned char)buf[0] == 0xEF && (unsigned char)buf[1] == 0xBB &&
+            (unsigned char)buf[2] == 0xBF) {
             // Scan for escape markers and multibyte content in one pass
             bool hasHighByte = false;
             for (size_t i = 3; i < len; i++) {
@@ -172,7 +172,7 @@ namespace FileRead {
         utf8Result.reserve(escapedText.size() * 2);
 
         for (size_t i = 0; i < escapedText.size(); i++) {
-            unsigned char b = (unsigned char)escapedText[i];
+            unsigned char b  = (unsigned char)escapedText[i];
             wchar_t       cp = CP1252ToUCS2(b);
 
             if (cp < 0x80) {
@@ -204,8 +204,8 @@ namespace FileRead {
     // Helper to seek a file handle back to the beginning using the original API.
     static void seekToBeginning(HANDLE hFile) {
         LARGE_INTEGER zero = {};
-        auto seekFunc = origSetFilePointerEx ? origSetFilePointerEx
-                                             : (SetFilePointerExPtr)&SetFilePointerEx;
+        auto          seekFunc =
+            origSetFilePointerEx ? origSetFilePointerEx : (SetFilePointerExPtr)&SetFilePointerEx;
         seekFunc(hFile, zero, nullptr, FILE_BEGIN);
     }
 
@@ -213,8 +213,7 @@ namespace FileRead {
     // Returns empty vector on failure.
     static std::vector<char> readEntireFile(HANDLE hFile) {
         LARGE_INTEGER fileSize;
-        auto getSizeFunc = origGetFileSizeEx ? origGetFileSizeEx
-                                            : (GetFileSizeExPtr)&GetFileSizeEx;
+        auto getSizeFunc = origGetFileSizeEx ? origGetFileSizeEx : (GetFileSizeExPtr)&GetFileSizeEx;
         if (!getSizeFunc(hFile, &fileSize) || fileSize.QuadPart == 0)
             return {};
 
@@ -346,8 +345,7 @@ namespace FileRead {
     }
 
     static BOOL WINAPI hookedSetFilePointerEx(HANDLE hFile, LARGE_INTEGER liDistanceToMove,
-                                               PLARGE_INTEGER lpNewFilePointer,
-                                               DWORD          dwMoveMethod) {
+                                              PLARGE_INTEGER lpNewFilePointer, DWORD dwMoveMethod) {
         if (trackedHandles.empty())
             return origSetFilePointerEx(hFile, liDistanceToMove, lpNewFilePointer, dwMoveMethod);
 
@@ -359,9 +357,11 @@ namespace FileRead {
             LONGLONG     newPos  = 0;
 
             switch (dwMoveMethod) {
-                case FILE_BEGIN:   newPos = liDistanceToMove.QuadPart; break;
-                case FILE_CURRENT: newPos = (LONGLONG)state.readOffset + liDistanceToMove.QuadPart; break;
-                case FILE_END:     newPos = dataLen + liDistanceToMove.QuadPart; break;
+                case FILE_BEGIN: newPos = liDistanceToMove.QuadPart; break;
+                case FILE_CURRENT:
+                    newPos = (LONGLONG)state.readOffset + liDistanceToMove.QuadPart;
+                    break;
+                case FILE_END: newPos = dataLen + liDistanceToMove.QuadPart; break;
                 default:
                     LeaveCriticalSection(&handleLock);
                     SetLastError(ERROR_INVALID_PARAMETER);
@@ -454,8 +454,8 @@ namespace FileRead {
             origCreateFileW = (decltype(origCreateFileW))IATHook::Hook(
                 exeModule, "kernel32.dll", "CreateFileW", (void*)hookedCreateFileW);
 
-            origReadFile = (decltype(origReadFile))IATHook::Hook(
-                exeModule, "kernel32.dll", "ReadFile", (void*)hookedReadFile);
+            origReadFile = (decltype(origReadFile))IATHook::Hook(exeModule, "kernel32.dll",
+                                                                 "ReadFile", (void*)hookedReadFile);
 
             origCloseHandle = (decltype(origCloseHandle))IATHook::Hook(
                 exeModule, "kernel32.dll", "CloseHandle", (void*)hookedCloseHandle);
@@ -473,19 +473,19 @@ namespace FileRead {
         // Checksum spoof: patch "TEST EAX,EAX / SETZ BL" after the compare CALL
         // to "MOV BL,1 / NOP / NOP / NOP", forcing the result to always be "equal".
         if (options.achievementUnlock) {
-            BytePattern::temp_instance()
-                .find_pattern("48 8B 12 48 8D 0D ? ? ? ? E8 ? ? ? ? 85 C0 0F 94 C3");
+            BytePattern::temp_instance().find_pattern(
+                "48 8B 12 48 8D 0D ? ? ? ? E8 ? ? ? ? 85 C0 0F 94 C3");
 
             const size_t expected = 2;
-            size_t count = BytePattern::temp_instance().count();
+            size_t       count    = BytePattern::temp_instance().count();
 
             if (count == 0) {
                 BytePattern::LoggingInfo("[checksum] Pattern not found!\n");
             } else {
                 if (count != expected) {
-                    BytePattern::LoggingInfo(
-                        "[checksum] WARNING: expected " + std::to_string(expected) +
-                        " matches, found " + std::to_string(count) + "\n");
+                    BytePattern::LoggingInfo("[checksum] WARNING: expected " +
+                                             std::to_string(expected) + " matches, found " +
+                                             std::to_string(count) + "\n");
                 }
 
                 uintptr_t firstMatch = BytePattern::temp_instance().get_first().address();
@@ -494,10 +494,10 @@ namespace FileRead {
                 vanillaChecksum = reinterpret_cast<const char*>(
                     Injector::GetBranchDestination(firstMatch + 3, true));
 
-                const uint8_t expectedBytes[] = { 0x85, 0xC0, 0x0F, 0x94, 0xC3 };
-                size_t patched = 0;
+                const uint8_t expectedBytes[] = {0x85, 0xC0, 0x0F, 0x94, 0xC3};
+                size_t        patched         = 0;
                 for (size_t i = 0; i < count; i++) {
-                    uintptr_t addr = BytePattern::temp_instance().get(i).address();
+                    uintptr_t addr      = BytePattern::temp_instance().get(i).address();
                     uintptr_t patchAddr = addr + 15;
 
                     // Verify target bytes before patching
@@ -509,15 +509,14 @@ namespace FileRead {
                         }
                     }
                     if (!match) {
-                        BytePattern::LoggingInfo(
-                            "[checksum] Skipped site " + std::to_string(i) +
-                            ": unexpected bytes at patch target\n");
+                        BytePattern::LoggingInfo("[checksum] Skipped site " + std::to_string(i) +
+                                                 ": unexpected bytes at patch target\n");
                         continue;
                     }
 
                     // "85 C0 0F 94 C3" = TEST EAX,EAX / SETZ BL (5 bytes)
                     // → "B3 01 90 90 90" = MOV BL,1 / NOP / NOP / NOP
-                    Injector::WriteMemory<uint8_t>(patchAddr,     0xB3, true);
+                    Injector::WriteMemory<uint8_t>(patchAddr, 0xB3, true);
                     Injector::WriteMemory<uint8_t>(patchAddr + 1, 0x01, true);
                     Injector::WriteMemory<uint8_t>(patchAddr + 2, 0x90, true);
                     Injector::WriteMemory<uint8_t>(patchAddr + 3, 0x90, true);
@@ -526,8 +525,8 @@ namespace FileRead {
                 }
 
                 BytePattern::LoggingInfo(
-                    "[checksum] Patched " + std::to_string(patched) + "/" +
-                    std::to_string(count) + " compare sites" +
+                    "[checksum] Patched " + std::to_string(patched) + "/" + std::to_string(count) +
+                    " compare sites" +
                     (vanillaChecksum ? ", vanilla checksum: " + std::string(vanillaChecksum) : "") +
                     "\n");
             }

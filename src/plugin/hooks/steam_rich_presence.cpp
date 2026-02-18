@@ -84,14 +84,14 @@ namespace SteamRichPresence {
                    ep->ExceptionRecord->ExceptionAddress);
             if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
                 logMsg("  Access type: %s, target address: %p\n",
-                       ep->ExceptionRecord->ExceptionInformation[0] == 0 ? "READ"
+                       ep->ExceptionRecord->ExceptionInformation[0] == 0   ? "READ"
                        : ep->ExceptionRecord->ExceptionInformation[0] == 1 ? "WRITE"
                                                                            : "EXECUTE",
                        (void*)ep->ExceptionRecord->ExceptionInformation[1]);
             }
-            logMsg("  RIP=%p RSP=%p RCX=%p RAX=%p\n",
-                   (void*)ep->ContextRecord->Rip, (void*)ep->ContextRecord->Rsp,
-                   (void*)ep->ContextRecord->Rcx, (void*)ep->ContextRecord->Rax);
+            logMsg("  RIP=%p RSP=%p RCX=%p RAX=%p\n", (void*)ep->ContextRecord->Rip,
+                   (void*)ep->ContextRecord->Rsp, (void*)ep->ContextRecord->Rcx,
+                   (void*)ep->ContextRecord->Rax);
             logClose();
             longjmp(initJmpBuf, 1);
             return EXCEPTION_CONTINUE_SEARCH; // unreachable
@@ -204,7 +204,7 @@ namespace SteamRichPresence {
             void* thunkTarget = resolveThunkTarget(fnBytes);
             if (!thunkTarget) {
                 // Not a thunk, or target is null — for thunks, poll until ready
-                int off = (fnBytes[0] == 0x48) ? 1 : 0;
+                int  off     = (fnBytes[0] == 0x48) ? 1 : 0;
                 bool isThunk = (fnBytes[off] == 0xFF && fnBytes[off + 1] == 0x25);
                 if (!isThunk && fnBytes[0] == 0x48 && fnBytes[1] == 0x8B && fnBytes[2] == 0x05) {
                     isThunk = true;
@@ -215,7 +215,8 @@ namespace SteamRichPresence {
                         Sleep(1000);
                         thunkTarget = resolveThunkTarget(fnBytes);
                         if (thunkTarget) {
-                            logMsg("  Thunk target resolved after %ds: %p\n", wait + 1, thunkTarget);
+                            logMsg("  Thunk target resolved after %ds: %p\n", wait + 1,
+                                   thunkTarget);
                             break;
                         }
                     }
@@ -336,7 +337,8 @@ namespace SteamRichPresence {
     //   [48] FF A0 XX XX XX XX   jmp [rax+disp32]
     static int parseVtableDispatch(const uint8_t* fn) {
         if (fn[0] != 0x48 || fn[1] != 0x8B || fn[2] != 0x01) {
-            logMsg("  parseVtableDispatch: no match (header %02X %02X %02X)\n", fn[0], fn[1], fn[2]);
+            logMsg("  parseVtableDispatch: no match (header %02X %02X %02X)\n", fn[0], fn[1],
+                   fn[2]);
             return -1;
         }
 
